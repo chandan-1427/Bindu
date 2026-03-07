@@ -190,7 +190,11 @@ ability to process documents with `application/pdf` and the DOCX MIME type.
   "role": "user",
   "parts": [
     {"kind": "text", "text": "What is the methodology?"},
-    {"kind": "file", "file": {"bytes": "…", "mimeType": "application/pdf"}}
+    {
+      "kind": "file",
+      "text": "Attached document",
+      "file": {"bytes": "…", "mimeType": "application/pdf"}
+    }
   ],
   …
 }
