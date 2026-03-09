@@ -23,35 +23,32 @@ tests/
 
 ### Run All Tests
 ```bash
-pytest
+uv run pytest
 ```
 
 ### Run Specific Test Categories
 ```bash
 # Unit tests only
-pytest tests/unit/
+uv run pytest tests/unit/
 
+# Integration tests only
+uv run pytest tests/integration/
 
 # Specific test file
-pytest tests/unit/test_protocol_types.py
+uv run pytest tests/unit/test_protocol_types.py
 
 # Specific test class
-pytest tests/unit/test_storage.py::TestTaskStorage
+uv run pytest tests/unit/test_storage.py::TestTaskStorage
 
 # Specific test
-pytest tests/unit/test_storage.py::TestTaskStorage::test_save_and_load_task
+uv run pytest tests/unit/test_storage.py::TestTaskStorage::test_save_and_load_task
 ```
 
 ### Run with Coverage
 ```bash
-# Install pytest-cov first
-uv add --dev pytest-cov
-
-# Run with coverage
-pytest --cov=bindu --cov-report=html --cov-report=term-missing
-
-# View HTML coverage report
-open htmlcov/index.html
+# Run with coverage and enforce minimum threshold
+uv run pytest --cov=bindu --cov-report=term-missing
+uv run coverage report --skip-covered --fail-under=70
 ```
 
 ### Run with Markers
@@ -208,5 +205,6 @@ pytest --timeout=10
 When adding new features:
 1. Write tests first (TDD)
 2. Ensure all tests pass
-3. Maintain CI minimum coverage (64%) and aim for 80%+ on new or updated code.
+3. Maintain minimum 70% coverage overall (target: 80%+)
+4. Add integration tests for new endpoints
 5. Update this README if needed
