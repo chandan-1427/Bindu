@@ -928,22 +928,6 @@ Bindu [Apache License 2.0](https://choosealicense.com/licenses/apache-2.0/)-‡¶è‡
       </a>
       <br />
     </td>
-    <td align="center">
-      <a href="https://github.com/Gaurika-Sethi">
-        <img src="https://avatars.githubusercontent.com/u/178935569?v=4" width="100px;" alt="Gaurika Sethi"/>
-        <br />
-        <sub><b>Gaurika Sethi</b></sub>
-      </a>
-      <br />
-    </td>
-    <td align="center">
-      <a href="https://github.com/Avngrstark62">
-        <img src="https://avatars.githubusercontent.com/u/133889196?v=4" width="100px;" alt="Abhijeet Singh Thakur"/>
-        <br />
-        <sub><b>Abhijeet Singh Thakur</b></sub>
-      </a>
-      <br />
-    </td>
   </tr>
 </table>
 

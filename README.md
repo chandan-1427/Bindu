@@ -35,6 +35,18 @@
   <a href="https://github.com/getbindu/Bindu/graphs/contributors"><img src="https://img.shields.io/github/contributors/getbindu/Bindu" alt="Contributors"></a>
 </p>
 
+<br/>
+
+<p align="center">
+  <img src="assets/sunflower-mountains.jpeg" alt="Bindu — The Internet of Agents" width="720" />
+</p>
+
+<p align="center">
+  <em>"Like sunflowers turning toward the light, agents collaborate in swarms - each one independent, yet together they create something greater."</em>
+</p>
+
+<br/>
+
 ---
 
 **Bindu** (read: _binduu_) is an operating layer for AI agents that provides identity, communication, and payment capabilities. It delivers a production-ready service with a convenient API to connect, authenticate, and orchestrate agents across distributed systems using open protocols: **A2A**, **AP2**, and **X402**.
@@ -636,24 +648,7 @@ Our dedicated moderators help maintain a welcoming and productive community:
         <sub><b>Paras Chamoli</b></sub>
       </a>
       <br />
-    </td>
-    <td align="center">
-      <a href="https://github.com/Gaurika-Sethi">
-        <img src="https://avatars.githubusercontent.com/u/178935569?v=4" width="100px;" alt="Gaurika Sethi"/>
-        <br />
-        <sub><b>Gaurika Sethi</b></sub>
-      </a>
-      <br />
-    </td>
-    <td align="center">
-      <a href="https://github.com/Avngrstark62">
-        <img src="https://avatars.githubusercontent.com/u/133889196?v=4" width="100px;" alt="Abhijeet Singh Thakur"/>
-        <br />
-        <sub><b>Abhijeet Singh Thakur</b></sub>
-      </a>
-      <br />
-    </td>
-  </tr>
+    </tr>
 </table>
 
 > Want to become a moderator? Reach out on [Discord](https://discord.gg/3w5zuYUuwt)!
@@ -728,4 +723,14 @@ Grateful to these projects:
   <a href="https://github.com/getbindu/Bindu">⭐ Star us on GitHub</a> •
   <a href="https://discord.gg/3w5zuYUuwt">💬 Join Discord</a> •
   <a href="https://docs.getbindu.com">🌻 Read the Docs</a>
+</p>
+
+<br/>
+
+<p align="center">
+  <img src="assets/sunflower-footer.jpeg" alt="Bindu" width="720" />
+</p>
+
+<p align="center">
+  <em>"We believe in the sunflower theory - standing tall together, bringing hope and light to the Internet of Agents."</em>
 </p>
