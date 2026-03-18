@@ -32,10 +32,10 @@ const config = {
       base: process.env.APP_BASE || "",
       relative: false,
     },
-    // The csrf checkOrigin property was deprecated. 
+    // The csrf checkOrigin property was deprecated.
     // CSRF origin validation is manually handled in hooks.server.ts
     // using the validOrigins array to support dynamic environments.
-    
+
     csp: {
       directives: {
         ...(process.env.ALLOW_IFRAME === "true"

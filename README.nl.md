@@ -30,7 +30,7 @@
 Gebouwd met een gedistribueerde architectuur (Task Manager, scheduler, storage), maakt Bindu het eenvoudig om snel te ontwikkelen en te integreren met elk AI-framework. Transformeer elk agent-framework in een volledig interoperabele service voor communicatie, samenwerking en commerce in het Internet of Agents.
 
 <p align="center">
-  <strong>🌟 <a href="https://bindus.directory">Registreer je agent</a> • 🌻 <a href="https://docs.getbindu.com">Documentatie</a> • 💬 <a href="https://discord.gg/3w5zuYUuwt">Discord Community</a></strong>
+  <strong>🌟 <a href="https://getbindu.com">Registreer je agent</a> • 🌻 <a href="https://docs.getbindu.com">Documentatie</a> • 💬 <a href="https://discord.gg/3w5zuYUuwt">Discord Community</a></strong>
 </p>
 
 ---
@@ -140,7 +140,7 @@ uvx cookiecutter https://github.com/getbindu/create-bindu-agent.git
 
 Dat is alles! Je lokale agent is nu een live, veilige en vindbare service. [Meer informatie →](https://docs.getbindu.com/bindu/create-bindu-agent/overview)
 
-> **💡 Pro tip:** Agents die met Cookiecutter zijn gemaakt, bevatten GitHub Actions die je agent automatisch registreren in de [Bindu Directory](https://bindus.directory) wanneer je naar je repository pusht. Geen handmatige registratie nodig!
+> **💡 Pro tip:** Agents die met Cookiecutter zijn gemaakt, bevatten GitHub Actions die je agent automatisch registreren in de [GetBindu.com](https://getbindu.com) wanneer je naar je repository pusht. Geen handmatige registratie nodig!
 
 ### Optie 2: Handmatige setup
 
@@ -742,16 +742,16 @@ Bindu ondersteunt **real-time webhook notifications** voor langlopende taken, vo
 Bindu bevat een mooie chat interface op `http://localhost:3773/docs`
 
 <p align="center">
-  <img src="assets/agent-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="assets/new-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
 </p>
 
 ---
 
 <br/>
 
-## 🌐 Bindu Directory
+## 🌐 GetBindu.com
 
-De [**Bindu Directory**](https://bindus.directory) is een openbaar register van alle Bindu agents, waardoor ze vindbaar en toegankelijk zijn voor het bredere agent ecosysteem.
+De [**GetBindu.com**](https://getbindu.com) is een openbaar register van alle Bindu agents, waardoor ze vindbaar en toegankelijk zijn voor het bredere agent ecosysteem.
 
 ### ✨ Automatische registratie met Cookiecutter
 
@@ -759,9 +759,9 @@ Wanneer je een agent maakt met de cookiecutter template, bevat deze een vooraf g
 
 1. **Maak je agent** met cookiecutter
 2. **Push naar GitHub** - De GitHub Action triggert automatisch
-3. **Je agent verschijnt** in de [Bindu Directory](https://bindus.directory)
+3. **Je agent verschijnt** in de [GetBindu.com](https://getbindu.com)
 
-> **🔑 Opmerking**: Je moet de BINDU_PAT_TOKEN verzamelen van bindus.directory en deze gebruiken om je agent te registreren.
+> **🔑 Opmerking**: Je moet de BINDU_PAT_TOKEN verzamelen van getbindu.com en deze gebruiken om je agent te registreren.
 
 ### 📝 Handmatige registratie
 
@@ -811,6 +811,7 @@ NightSky maakt zwermen van agents mogelijk. Elke Bindu is een punt dat agents an
 
 Bindu is **framework-agnostisch** en getest met:
 
+- **AG2** (voorheen AutoGen)
 - **Agno**
 - **CrewAI**
 - **LangChain**
@@ -975,7 +976,7 @@ Dankbaar aan deze projecten:
 
 ## 🎓 Workshops
 
-- [AI Native in Action: Agent Symphony](https://www.meetup.com/ai-native-amsterdam/events/311066899/) - [Slides](https://docs.google.com/presentation/d/1SqGXI0Gv_KCWZ1Mw2SOx_kI0u-LLxwZq7lMSONdl8oQ/edit)
+- [AI Native in Action: Agent Symphony](https://www.meetup.com/ai-native-Amsterdam && India/events/311066899/) - [Slides](https://docs.google.com/presentation/d/1SqGXI0Gv_KCWZ1Mw2SOx_kI0u-LLxwZq7lMSONdl8oQ/edit)
 
 ---
 
@@ -988,7 +989,7 @@ Dankbaar aan deze projecten:
 ---
 
 <p align="center">
-  <strong>Gebouwd met 💛 door het team uit Amsterdam</strong><br/>
+  <strong>Gebouwd met 💛 door het team uit Amsterdam && India</strong><br/>
   <em>Happy Bindu! 🌻🚀✨</em>
 </p>
 

@@ -30,7 +30,7 @@
 Construit avec une architecture distribuée (Task Manager, scheduler, storage), Bindu facilite le développement rapide et l'intégration avec n'importe quel framework IA. Transformez n'importe quel framework d'agents en un service entièrement interopérable pour la communication, la collaboration et le commerce dans l'Internet of Agents.
 
 <p align="center">
-  <strong>🌟 <a href="https://bindus.directory">Enregistrez votre agent</a> • 🌻 <a href="https://docs.getbindu.com">Documentation</a> • 💬 <a href="https://discord.gg/3w5zuYUuwt">Communauté Discord</a></strong>
+  <strong>🌟 <a href="https://getbindu.com">Enregistrez votre agent</a> • 🌻 <a href="https://docs.getbindu.com">Documentation</a> • 💬 <a href="https://discord.gg/3w5zuYUuwt">Communauté Discord</a></strong>
 </p>
 
 ---
@@ -140,7 +140,7 @@ uvx cookiecutter https://github.com/getbindu/create-bindu-agent.git
 
 C'est tout ! Votre agent local est maintenant un service en direct, sécurisé et découvrable. [En savoir plus →](https://docs.getbindu.com/bindu/create-bindu-agent/overview)
 
-> **💡 Conseil pro :** Les agents créés avec Cookiecutter incluent des GitHub Actions qui enregistrent automatiquement votre agent dans le [Bindu Directory](https://bindus.directory) lorsque vous poussez vers votre dépôt. Pas besoin d'enregistrement manuel !
+> **💡 Conseil pro :** Les agents créés avec Cookiecutter incluent des GitHub Actions qui enregistrent automatiquement votre agent dans le [GetBindu.com](https://getbindu.com) lorsque vous poussez vers votre dépôt. Pas besoin d'enregistrement manuel !
 
 ### Option 2 : Configuration manuelle
 
@@ -742,16 +742,16 @@ Bindu prend en charge les **notifications webhook en temps réel** pour les tâc
 Bindu inclut une belle interface de chat sur `http://localhost:3773/docs`
 
 <p align="center">
-  <img src="assets/agent-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="assets/new-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
 </p>
 
 ---
 
 <br/>
 
-## 🌐 Bindu Directory
+## 🌐 GetBindu.com
 
-Le [**Bindu Directory**](https://bindus.directory) est un registre public de tous les agents Bindu, les rendant découvrables et accessibles pour l'écosystème d'agents plus large.
+Le [**GetBindu.com**](https://getbindu.com) est un registre public de tous les agents Bindu, les rendant découvrables et accessibles pour l'écosystème d'agents plus large.
 
 ### ✨ Enregistrement automatique avec Cookiecutter
 
@@ -759,9 +759,9 @@ Lorsque vous créez un agent en utilisant le modèle cookiecutter, il inclut une
 
 1. **Créez votre agent** en utilisant cookiecutter
 2. **Poussez vers GitHub** - La GitHub Action se déclenche automatiquement
-3. **Votre agent apparaît** dans le [Bindu Directory](https://bindus.directory)
+3. **Votre agent apparaît** dans le [GetBindu.com](https://getbindu.com)
 
-> **🔑 Note** : Vous devez collecter le BINDU_PAT_TOKEN depuis bindus.directory et l'utiliser pour enregistrer votre agent.
+> **🔑 Note** : Vous devez collecter le BINDU_PAT_TOKEN depuis getbindu.com et l'utiliser pour enregistrer votre agent.
 
 ### 📝 Enregistrement manuel
 
@@ -811,6 +811,7 @@ NightSky permet des essaims d'agents. Chaque Bindu est un point qui annote les a
 
 Bindu est **agnostique au framework** et testé avec :
 
+- **AG2** (anciennement AutoGen)
 - **Agno**
 - **CrewAI**
 - **LangChain**
@@ -975,7 +976,7 @@ Reconnaissants envers ces projets :
 
 ## 🎓 Ateliers
 
-- [AI Native in Action: Agent Symphony](https://www.meetup.com/ai-native-amsterdam/events/311066899/) - [Slides](https://docs.google.com/presentation/d/1SqGXI0Gv_KCWZ1Mw2SOx_kI0u-LLxwZq7lMSONdl8oQ/edit)
+- [AI Native in Action: Agent Symphony](https://www.meetup.com/ai-native-Amsterdam && India/events/311066899/) - [Slides](https://docs.google.com/presentation/d/1SqGXI0Gv_KCWZ1Mw2SOx_kI0u-LLxwZq7lMSONdl8oQ/edit)
 
 ---
 
@@ -988,7 +989,7 @@ Reconnaissants envers ces projets :
 ---
 
 <p align="center">
-  <strong>Construit avec 💛 par l'équipe d'Amsterdam</strong><br/>
+  <strong>Construit avec 💛 par l'équipe d'Amsterdam && India</strong><br/>
   <em>Happy Bindu! 🌻🚀✨</em>
 </p>
 

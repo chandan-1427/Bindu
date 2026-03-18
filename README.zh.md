@@ -30,7 +30,7 @@
 采用分布式架构（Task Manager、scheduler、storage）构建，Bindu 使快速开发和与任何 AI 框架集成变得简单。将任何代理框架转变为完全可互操作的服务，用于 Internet of Agents 中的通信、协作和商务。
 
 <p align="center">
-  <strong>🌟 <a href="https://bindus.directory">注册您的代理</a> • 🌻 <a href="https://docs.getbindu.com">文档</a> • 💬 <a href="https://discord.gg/3w5zuYUuwt">Discord 社区</a></strong>
+  <strong>🌟 <a href="https://getbindu.com">注册您的代理</a> • 🌻 <a href="https://docs.getbindu.com">文档</a> • 💬 <a href="https://discord.gg/3w5zuYUuwt">Discord 社区</a></strong>
 </p>
 
 ---
@@ -140,7 +140,7 @@ uvx cookiecutter https://github.com/getbindu/create-bindu-agent.git
 
 就这样！您的本地代理现在是一个实时、安全且可发现的服务。[了解更多 →](https://docs.getbindu.com/bindu/create-bindu-agent/overview)
 
-> **💡 专业提示：** 使用 Cookiecutter 创建的代理包含 GitHub Actions，当您推送到仓库时会自动将代理注册到 [Bindu Directory](https://bindus.directory)。无需手动注册！
+> **💡 专业提示：** 使用 Cookiecutter 创建的代理包含 GitHub Actions，当您推送到仓库时会自动将代理注册到 [GetBindu.com](https://getbindu.com)。无需手动注册！
 
 ### 选项 2：手动设置
 
@@ -742,16 +742,16 @@ Bindu 支持长时间运行任务的**实时 webhook 通知**，遵循 [A2A Prot
 Bindu 在 `http://localhost:3773/docs` 包含一个漂亮的聊天界面
 
 <p align="center">
-  <img src="assets/agent-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="assets/new-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
 </p>
 
 ---
 
 <br/>
 
-## 🌐 Bindu Directory
+## 🌐 GetBindu.com
 
-[**Bindu Directory**](https://bindus.directory) 是所有 Bindu 代理的公共注册表，使它们在更广泛的代理生态系统中可被发现和访问。
+[**GetBindu.com**](https://getbindu.com) 是所有 Bindu 代理的公共注册表，使它们在更广泛的代理生态系统中可被发现和访问。
 
 ### ✨ 使用 Cookiecutter 自动注册
 
@@ -759,9 +759,9 @@ Bindu 在 `http://localhost:3773/docs` 包含一个漂亮的聊天界面
 
 1. **使用 cookiecutter 创建您的代理**
 2. **推送到 GitHub** - GitHub Action 自动触发
-3. **您的代理出现**在 [Bindu Directory](https://bindus.directory) 中
+3. **您的代理出现**在 [GetBindu.com](https://getbindu.com) 中
 
-> **🔑 注意**：您需要从 bindus.directory 收集 BINDU_PAT_TOKEN 并使用它来注册您的代理。
+> **🔑 注意**：您需要从 getbindu.com 收集 BINDU_PAT_TOKEN 并使用它来注册您的代理。
 
 ### 📝 手动注册
 
@@ -811,6 +811,7 @@ NightSky 实现代理群。每个 Bindu 都是一个点，用 A2A、AP2 和 X402
 
 Bindu 是**框架无关的**，并已测试：
 
+- **AG2**（原 AutoGen）
 - **Agno**
 - **CrewAI**
 - **LangChain**
@@ -975,7 +976,7 @@ Bindu 在 [Apache License 2.0](https://choosealicense.com/licenses/apache-2.0/) 
 
 ## 🎓 研讨会
 
-- [AI Native in Action: Agent Symphony](https://www.meetup.com/ai-native-amsterdam/events/311066899/) - [幻灯片](https://docs.google.com/presentation/d/1SqGXI0Gv_KCWZ1Mw2SOx_kI0u-LLxwZq7lMSONdl8oQ/edit)
+- [AI Native in Action: Agent Symphony](https://www.meetup.com/ai-native-Amsterdam && India/events/311066899/) - [幻灯片](https://docs.google.com/presentation/d/1SqGXI0Gv_KCWZ1Mw2SOx_kI0u-LLxwZq7lMSONdl8oQ/edit)
 
 ---
 

@@ -21,7 +21,7 @@ Workers implement the hybrid pattern by:
 from __future__ import annotations as _annotations
 
 from abc import ABC, abstractmethod
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 

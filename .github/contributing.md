@@ -34,7 +34,7 @@ Report any unacceptable behavior to `raahul@getbindu.com`.
 - **uv** package manager (recommended) or pip
 - **Git** for version control
 - Basic understanding of async Python and FastAPI
-- Familiarity with agent frameworks (Agno, CrewAI, LangChain, etc.) is helpful
+- Familiarity with agent frameworks (AG2, Agno, CrewAI, LangChain, etc.) is helpful
 
 ### Areas to Contribute
 
