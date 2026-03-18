@@ -742,7 +742,7 @@ Bindu soporta **notificaciones webhook en tiempo real** para tareas de larga dur
 Bindu incluye una hermosa interfaz de chat en `http://localhost:3773/docs`
 
 <p align="center">
-  <img src="assets/agent-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="assets/new-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
 </p>
 
 ---
