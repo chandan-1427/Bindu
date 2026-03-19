@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
-from bindu.auth.hydra.registration import load_agent_credentials
 from bindu.utils.did import sign_request
 from .client import AsyncHTTPClient
 from bindu.utils.logging import get_logger
@@ -50,6 +49,10 @@ class HybridAuthClient:
 
     async def initialize(self):
         """Load credentials and get initial access token."""
+        # Import here to avoid circular dependency:
+        # auth_client -> registration -> HydraClient -> AsyncHTTPClient -> auth_client
+        from bindu.auth.hydra.registration import load_agent_credentials
+        
         # Load OAuth credentials
         self.credentials = load_agent_credentials(self.agent_id, self.credentials_dir)
         if not self.credentials:

@@ -40,7 +40,6 @@ from bindu.settings import app_settings
 from bindu.utils import get_x402_extension_from_capabilities
 from bindu.utils.retry import execute_with_retry
 
-from .middleware.auth import HydraMiddleware
 from .scheduler.base import Scheduler
 from .storage.base import Storage
 from .task_manager import TaskManager
@@ -625,6 +624,8 @@ class BinduApplication(Starlette):
         Raises:
             ValueError: If authentication provider is unknown
         """
+        from .middleware.auth import HydraMiddleware
+        
         provider = app_settings.auth.provider.lower()
 
         if provider == "hydra":
