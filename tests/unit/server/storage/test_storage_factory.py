@@ -15,9 +15,9 @@ class TestStorageFactory:
         """Test creating memory storage from settings."""
         with patch("bindu.server.storage.factory.app_settings") as mock_settings:
             mock_settings.storage.backend = "memory"
-            
+
             storage = await create_storage()
-            
+
             assert isinstance(storage, InMemoryStorage)
 
     @pytest.mark.asyncio
@@ -25,7 +25,7 @@ class TestStorageFactory:
         """Test that invalid backend raises ValueError."""
         with patch("bindu.server.storage.factory.app_settings") as mock_settings:
             mock_settings.storage.backend = "invalid"
-            
+
             with pytest.raises(ValueError, match="Unknown storage backend"):
                 await create_storage()
 
@@ -34,7 +34,7 @@ class TestStorageFactory:
         """Test that Postgres storage without SQLAlchemy raises error."""
         with patch("bindu.server.storage.factory.app_settings") as mock_settings:
             mock_settings.storage.backend = "postgres"
-            
+
             with patch("bindu.server.storage.factory.POSTGRES_AVAILABLE", False):
                 with pytest.raises(ValueError, match="requires SQLAlchemy"):
                     await create_storage()
@@ -45,7 +45,7 @@ class TestStorageFactory:
         with patch("bindu.server.storage.factory.app_settings") as mock_settings:
             mock_settings.storage.backend = "postgres"
             mock_settings.storage.postgres_url = None
-            
+
             with patch("bindu.server.storage.factory.POSTGRES_AVAILABLE", True):
                 with pytest.raises(ValueError, match="requires a database URL"):
                     await create_storage()
@@ -55,7 +55,7 @@ class TestStorageFactory:
         """Test closing storage gracefully."""
         mock_storage = AsyncMock()
         mock_storage.close = AsyncMock()
-        
+
         await close_storage(mock_storage)
-        
+
         mock_storage.close.assert_called_once()

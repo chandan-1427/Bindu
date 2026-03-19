@@ -430,7 +430,7 @@ class TestRegisterAgentInHydra:
                 with patch(
                     "bindu.auth.hydra.registration.HydraClient", return_value=mock_hydra
                 ):
-                    result = await register_agent_in_hydra(
+                    await register_agent_in_hydra(
                         agent_id="agent-123",
                         agent_name="Test Agent",
                         agent_url="http://localhost:3773",

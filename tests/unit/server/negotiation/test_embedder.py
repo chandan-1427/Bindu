@@ -32,7 +32,7 @@ class TestSkillEmbedder:
         embedder = SkillEmbedder(api_key="test-key")
 
         with patch("bindu.server.negotiation.embedder.AsyncHTTPClient") as mock_client:
-            client = embedder._get_client()
+            embedder._get_client()
 
             mock_client.assert_called_once()
             assert embedder._client is not None

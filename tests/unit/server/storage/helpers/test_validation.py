@@ -12,18 +12,18 @@ class TestValidation:
     def test_validate_uuid_type_with_uuid(self):
         """Test validating UUID object."""
         test_uuid = uuid4()
-        
+
         result = validate_uuid_type(test_uuid, "test_param")
-        
+
         assert result == test_uuid
         assert isinstance(result, UUID)
 
     def test_validate_uuid_type_with_string(self):
         """Test validating valid UUID string."""
         uuid_str = "550e8400-e29b-41d4-a716-446655440000"
-        
+
         result = validate_uuid_type(uuid_str, "test_param")
-        
+
         assert isinstance(result, UUID)
         assert str(result) == uuid_str
 

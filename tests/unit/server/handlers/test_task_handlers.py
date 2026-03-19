@@ -82,3 +82,52 @@ class TestTaskHandlers:
 
         assert "Feedback submitted successfully" in response["result"]["message"]
         mock_storage.store_task_feedback.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_cancel_task_terminal_state(self):
+        """Test canceling task in terminal state returns error."""
+        mock_storage = AsyncMock()
+        mock_task = {"id": "task123", "status": {"state": "completed"}}
+        mock_storage.load_task.return_value = mock_task
+        mock_scheduler = AsyncMock()
+
+        mock_error_creator = Mock(return_value={"error": "not cancelable"})
+        handler = TaskHandlers(
+            scheduler=mock_scheduler,
+            storage=mock_storage,
+            error_response_creator=mock_error_creator,
+        )
+        request = {
+            "jsonrpc": "2.0",
+            "id": "6",
+            "params": {"task_id": "task123"},
+        }
+
+        response = await handler.cancel_task(request)
+
+        assert "error" in response
+        mock_scheduler.cancel_task.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_cancel_task_not_found(self):
+        """Test canceling non-existent task."""
+        mock_storage = AsyncMock()
+        mock_storage.load_task.return_value = None
+        mock_scheduler = AsyncMock()
+
+        mock_error_creator = Mock(return_value={"error": "not found"})
+        handler = TaskHandlers(
+            scheduler=mock_scheduler,
+            storage=mock_storage,
+            error_response_creator=mock_error_creator,
+        )
+        request = {
+            "jsonrpc": "2.0",
+            "id": "7",
+            "params": {"task_id": "invalid"},
+        }
+
+        response = await handler.cancel_task(request)
+
+        assert "error" in response
+        mock_scheduler.cancel_task.assert_not_called()

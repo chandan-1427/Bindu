@@ -42,6 +42,19 @@ class TestContextHandlers:
         assert response["result"] == []
 
     @pytest.mark.asyncio
+    async def test_list_contexts_no_params(self):
+        """Test listing contexts with no params."""
+        mock_storage = AsyncMock()
+        mock_storage.list_contexts.return_value = None
+
+        handler = ContextHandlers(storage=mock_storage)
+        request = {"jsonrpc": "2.0", "id": "2"}
+
+        response = await handler.list_contexts(request)
+
+        assert response["result"] == []
+
+    @pytest.mark.asyncio
     async def test_clear_context_success(self):
         """Test clearing context successfully."""
         mock_storage = AsyncMock()

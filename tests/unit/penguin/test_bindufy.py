@@ -111,3 +111,71 @@ class TestBindufyUtilities:
 
         assert host == "localhost"
         assert port == 3773
+
+    def test_normalize_execution_costs_validates_dict_entries(self):
+        """Test that non-dict entries in list raise ValueError."""
+        with pytest.raises(ValueError, match="must be a dictionary"):
+            _normalize_execution_costs([{"amount": "100"}, "invalid"])
+
+    def test_normalize_execution_costs_requires_amount(self):
+        """Test that missing amount raises ValueError."""
+        with pytest.raises(ValueError, match="amount is required"):
+            _normalize_execution_costs({"token": "USDC"})
+
+    def test_normalize_execution_costs_uses_defaults(self):
+        """Test that default token and network are used."""
+        costs = [{"amount": "100"}]
+        result = _normalize_execution_costs(costs)
+
+        assert result[0]["token"] == "USDC"
+        assert result[0]["network"] == "base-sepolia"
+
+    def test_normalize_execution_costs_multiple_entries(self):
+        """Test normalizing multiple cost entries."""
+        costs = [
+            {"amount": "100", "token": "USDC"},
+            {"amount": "200", "token": "ETH", "network": "ethereum"},
+        ]
+        result = _normalize_execution_costs(costs)
+
+        assert len(result) == 2
+        assert result[0]["amount"] == "100"
+        assert result[1]["amount"] == "200"
+
+    def test_setup_x402_extension_with_multiple_options(self):
+        """Test X402 extension with multiple payment options."""
+        costs = [
+            {
+                "amount": "100",
+                "token": "USDC",
+                "network": "base-sepolia",
+                "pay_to_address": "0x123",
+            },
+            {
+                "amount": "200",
+                "token": "ETH",
+                "network": "ethereum",
+                "pay_to_address": "0x456",
+            },
+        ]
+
+        extension = _setup_x402_extension(costs)
+
+        assert extension.amount == "100"
+        assert extension.token == "USDC"
+        assert extension.payment_options == costs
+
+    def test_setup_x402_extension_with_address(self):
+        """Test X402 extension with pay_to_address."""
+        costs = [
+            {
+                "amount": "100",
+                "token": "USDC",
+                "network": "base-sepolia",
+                "pay_to_address": "0x123",
+            }
+        ]
+
+        extension = _setup_x402_extension(costs)
+
+        assert extension.pay_to_address == "0x123"
