@@ -9,8 +9,7 @@ from types import ModuleType
 
 
 def setup_opentelemetry_stubs():
-    """Setup OpenTelemetry stubs to avoid requiring the full package."""
-
+    """Set up OpenTelemetry stubs for testing."""
     ot_trace = ModuleType("opentelemetry.trace")
 
     class _Span:
@@ -102,7 +101,7 @@ def setup_opentelemetry_stubs():
 
 
 def setup_x402_stubs():
-    """Setup x402 payment extension stubs to avoid requiring the full package."""
+    """Set up X402 payment extension stubs for testing."""
 
     class _PaymentRequirements:
         def __init__(self, **kwargs):

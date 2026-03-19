@@ -5,7 +5,7 @@ while allowing customization of specific fields.
 """
 
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 
 class TaskBuilder:
@@ -16,6 +16,7 @@ class TaskBuilder:
     """
 
     def __init__(self):
+        """Initialize TaskBuilder with default values."""
         self._data: dict[str, Any] = {
             "id": str(uuid4()),
             "context_id": str(uuid4()),
@@ -62,6 +63,7 @@ class MessageBuilder:
     """
 
     def __init__(self):
+        """Initialize MessageBuilder with default values."""
         self._data: dict[str, Any] = {
             "id": str(uuid4()),
             "context_id": str(uuid4()),
@@ -106,9 +108,10 @@ class ContextBuilder:
         ctx = ContextBuilder().with_id("ctx-123").with_metadata({"key": "value"}).build()
     """
 
-    def __init__(self):
+    def __init__(self, context_id: UUID | None = None):
+        """Initialize ContextBuilder with optional context ID."""
         self._data: dict[str, Any] = {
-            "id": str(uuid4()),
+            "id": str(context_id or uuid4()),
             "metadata": {},
         }
 
@@ -134,9 +137,10 @@ class ArtifactBuilder:
         artifact = ArtifactBuilder().with_text("Result").with_mime_type("text/plain").build()
     """
 
-    def __init__(self):
+    def __init__(self, artifact_id: str | None = None):
+        """Initialize ArtifactBuilder with optional artifact ID."""
         self._data: dict[str, Any] = {
-            "id": str(uuid4()),
+            "id": artifact_id or str(uuid4()),
             "parts": [],
         }
 

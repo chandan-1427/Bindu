@@ -1,10 +1,15 @@
 """Tests for Bindu application server."""
 
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock
 from uuid import uuid4
-import pytest
 
-from bindu.common.models import StorageConfig, SchedulerConfig, AgentManifest, TelemetryConfig, SentryConfig
+from bindu.common.models import (
+    StorageConfig,
+    SchedulerConfig,
+    AgentManifest,
+    TelemetryConfig,
+    SentryConfig,
+)
 from bindu.server import applications
 from bindu.server.applications import BinduApplication
 
@@ -14,19 +19,22 @@ class TestBinduApplicationModule:
 
     def test_module_imports(self):
         """Test that the applications module can be imported."""
-        assert hasattr(applications, 'BinduApplication')
-        assert hasattr(applications, 'UNKNOWN_AUTH_PROVIDER_ERROR')
-        assert hasattr(applications, 'TASKMANAGER_NOT_INITIALIZED_ERROR')
+        assert hasattr(applications, "BinduApplication")
+        assert hasattr(applications, "UNKNOWN_AUTH_PROVIDER_ERROR")
+        assert hasattr(applications, "TASKMANAGER_NOT_INITIALIZED_ERROR")
 
     def test_application_constants(self):
         """Test application constants are defined."""
-        assert "Unknown authentication provider" in applications.UNKNOWN_AUTH_PROVIDER_ERROR
+        assert (
+            "Unknown authentication provider"
+            in applications.UNKNOWN_AUTH_PROVIDER_ERROR
+        )
         assert "TaskManager" in applications.TASKMANAGER_NOT_INITIALIZED_ERROR
 
     def test_bindu_application_class_exists(self):
         """Test that BinduApplication class exists and is callable."""
         assert callable(applications.BinduApplication)
-        assert hasattr(applications.BinduApplication, '__init__')
+        assert hasattr(applications.BinduApplication, "__init__")
 
     def test_storage_config_creation(self):
         """Test creating storage configuration."""
@@ -51,8 +59,7 @@ class TestBinduApplicationModule:
     def test_storage_config_postgres(self):
         """Test creating PostgreSQL storage configuration."""
         storage_config = StorageConfig(
-            type="postgres",
-            database_url="postgresql://localhost/test"
+            type="postgres", database_url="postgresql://localhost/test"
         )
 
         assert storage_config.type == "postgres"
@@ -73,9 +80,9 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(manifest=mock_manifest)
-        
+
         assert app.manifest == mock_manifest
         assert app.penguin_id is not None
         assert app.url == "http://localhost"
@@ -87,9 +94,9 @@ class TestBinduApplicationInitialization:
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
         custom_id = uuid4()
-        
+
         app = BinduApplication(manifest=mock_manifest, penguin_id=custom_id)
-        
+
         assert app.penguin_id == custom_id
 
     def test_init_with_storage_config(self):
@@ -98,9 +105,9 @@ class TestBinduApplicationInitialization:
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
         storage_config = StorageConfig(type="memory")
-        
+
         app = BinduApplication(manifest=mock_manifest, storage_config=storage_config)
-        
+
         assert app._storage_config == storage_config
 
     def test_init_with_scheduler_config(self):
@@ -109,9 +116,11 @@ class TestBinduApplicationInitialization:
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
         scheduler_config = SchedulerConfig(type="memory")
-        
-        app = BinduApplication(manifest=mock_manifest, scheduler_config=scheduler_config)
-        
+
+        app = BinduApplication(
+            manifest=mock_manifest, scheduler_config=scheduler_config
+        )
+
         assert app._scheduler_config == scheduler_config
 
     def test_init_with_telemetry_config(self):
@@ -120,9 +129,11 @@ class TestBinduApplicationInitialization:
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
         telemetry_config = TelemetryConfig(enabled=True)
-        
-        app = BinduApplication(manifest=mock_manifest, telemetry_config=telemetry_config)
-        
+
+        app = BinduApplication(
+            manifest=mock_manifest, telemetry_config=telemetry_config
+        )
+
         assert app._telemetry_config == telemetry_config
 
     def test_init_with_sentry_config(self):
@@ -131,9 +142,9 @@ class TestBinduApplicationInitialization:
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
         sentry_config = SentryConfig(enabled=True, dsn="https://example.com")
-        
+
         app = BinduApplication(manifest=mock_manifest, sentry_config=sentry_config)
-        
+
         assert app._sentry_config == sentry_config
 
     def test_init_with_custom_url_and_port(self):
@@ -141,13 +152,11 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(
-            manifest=mock_manifest,
-            url="https://example.com",
-            port=8080
+            manifest=mock_manifest, url="https://example.com", port=8080
         )
-        
+
         assert app.url == "https://example.com"
 
     def test_init_with_debug_mode(self):
@@ -155,9 +164,9 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(manifest=mock_manifest, debug=True)
-        
+
         assert app.debug is True
 
     def test_init_with_description(self):
@@ -165,12 +174,11 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(
-            manifest=mock_manifest,
-            description="Test agent description"
+            manifest=mock_manifest, description="Test agent description"
         )
-        
+
         assert app.description == "Test agent description"
 
     def test_init_with_cors_origins(self):
@@ -179,9 +187,9 @@ class TestBinduApplicationInitialization:
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
         cors_origins = ["https://example.com", "https://test.com"]
-        
+
         app = BinduApplication(manifest=mock_manifest, cors_origins=cors_origins)
-        
+
         assert app is not None
 
     def test_init_with_auth_enabled(self):
@@ -189,9 +197,9 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(manifest=mock_manifest, auth_enabled=True)
-        
+
         assert app is not None
 
     def test_init_sets_default_input_modes(self):
@@ -199,9 +207,9 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(manifest=mock_manifest)
-        
+
         assert "application/json" in app.default_input_modes
 
     def test_init_task_manager_is_none(self):
@@ -209,9 +217,9 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(manifest=mock_manifest)
-        
+
         assert app.task_manager is None
 
     def test_init_storage_is_none(self):
@@ -219,9 +227,9 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(manifest=mock_manifest)
-        
+
         assert app._storage is None
 
     def test_init_scheduler_is_none(self):
@@ -229,9 +237,9 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(manifest=mock_manifest)
-        
+
         assert app._scheduler is None
 
     def test_init_payment_sessions_dict(self):
@@ -239,9 +247,9 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(manifest=mock_manifest)
-        
+
         assert isinstance(app.payment_sessions, dict)
         assert len(app.payment_sessions) == 0
 
@@ -250,9 +258,9 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(manifest=mock_manifest, version="2.0.0")
-        
+
         assert app.version == "2.0.0"
 
     def test_init_auto_generates_penguin_id(self):
@@ -260,10 +268,10 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app1 = BinduApplication(manifest=mock_manifest)
         app2 = BinduApplication(manifest=mock_manifest)
-        
+
         assert app1.penguin_id != app2.penguin_id
 
     def test_init_with_default_telemetry_config(self):
@@ -271,9 +279,9 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(manifest=mock_manifest)
-        
+
         assert isinstance(app._telemetry_config, TelemetryConfig)
 
     def test_init_with_default_sentry_config(self):
@@ -281,7 +289,7 @@ class TestBinduApplicationInitialization:
         mock_manifest = Mock(spec=AgentManifest)
         mock_manifest.name = "test-agent"
         mock_manifest.capabilities = {}
-        
+
         app = BinduApplication(manifest=mock_manifest)
-        
+
         assert isinstance(app._sentry_config, SentryConfig)
