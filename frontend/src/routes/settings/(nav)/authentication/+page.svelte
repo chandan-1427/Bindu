@@ -146,11 +146,11 @@
 	function getExpirationTime(): string {
 		if (!authTokenExpiry) return "";
 		const expiryDate = new Date(authTokenExpiry);
-		return expiryDate.toLocaleTimeString([], {
-			hour: '2-digit',
+		return expiryDate.toLocaleTimeString([], { 
+			hour: '2-digit', 
 			minute: '2-digit',
 			second: '2-digit',
-			hour12: true
+			hour12: true 
 		});
 	}
 
@@ -182,7 +182,7 @@
 	$effect(() => {
 		if (authStatus === 'authenticated' && authTokenExpiry) {
 			if (countdownInterval) clearInterval(countdownInterval);
-
+			
 			countdownInterval = setInterval(() => {
 				timeDisplay = getTimeRemaining();
 				expiryTimeDisplay = getExpirationTime();

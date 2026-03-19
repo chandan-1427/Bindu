@@ -30,7 +30,7 @@ export function initializeAuth() {
     const token = localStorage.getItem('bindu_oauth_token');
     console.log('=== Initializing Auth ===');
     console.log('Token from localStorage (bindu_oauth_token):', token ? `${token.substring(0, 20)}...` : 'NULL (auth is optional)');
-
+    
     if (token) {
       console.log('Setting token in store and API client');
       authToken.set(token);
@@ -81,7 +81,7 @@ export function setError(errorMessage: string | null) {
 export async function loadContexts() {
   try {
     const serverContexts = await agentAPI.listContexts();
-
+    
     const transformedContexts = serverContexts.map(ctx => ({
       id: ctx.context_id || ctx.id,
       context_id: ctx.context_id || ctx.id,
@@ -98,7 +98,7 @@ export async function loadContexts() {
         try {
           const task = await agentAPI.getTask(ctx.taskIds[0]);
           const history = task.history || [];
-
+          
           for (const msg of history) {
             if (msg.role === 'user') {
               const parts = msg.parts || [];
@@ -111,7 +111,7 @@ export async function loadContexts() {
               }
             }
           }
-
+          
           if (task.status && task.status.timestamp) {
             ctx.timestamp = new Date(task.status.timestamp).getTime();
           }
@@ -131,16 +131,16 @@ export async function loadContexts() {
 export async function switchContext(ctxId: string) {
   try {
     console.log('=== SWITCH CONTEXT START ===', ctxId);
+    clearMessages();
     contextId.set(ctxId);
     console.log('Context ID set to:', ctxId);
-
+    
     const allContexts = get(contexts);
     const selectedContext = allContexts.find(c => c.id === ctxId);
     console.log('Selected context:', selectedContext);
-
+    
     if (!selectedContext || !selectedContext.taskIds || selectedContext.taskIds.length === 0) {
       console.log('No context or no tasks found');
-      clearMessages();
       return;
     }
 
@@ -164,9 +164,8 @@ export async function switchContext(ctxId: string) {
       return timeA - timeB;
     });
 
-    // Build new messages array first
-    const newMessages: DisplayMessage[] = [];
     console.log('Processing task history into messages...');
+    let messageCount = 0;
     for (const task of contextTasks) {
       const history = task.history || [];
       for (const msg of history) {
@@ -179,21 +178,14 @@ export async function switchContext(ctxId: string) {
           const text = textParts.join('\n');
           const sender = msg.role === 'user' ? 'user' : 'assistant';
           const state = sender === 'assistant' ? task.status.state : undefined;
-          newMessages.push({
-            id: generateUUID(),
-            text,
-            role: sender,
-            taskId: task.id,
-            state,
-            timestamp: Date.now()
-          });
+          addMessage(text, sender, task.id, state);
+          messageCount++;
         }
       }
     }
-
-    // Replace all messages at once to avoid flicker
-    messages.set(newMessages);
-    console.log('Set', newMessages.length, 'messages to display');
+    
+    console.log('Added', messageCount, 'messages to display');
+    console.log('Current messages store length:', get(messages).length);
 
     if (contextTasks.length > 0) {
       const lastTask = contextTasks[contextTasks.length - 1];
@@ -201,7 +193,7 @@ export async function switchContext(ctxId: string) {
       currentTaskState.set(lastTask.status.state);
       console.log('Set current task:', lastTask.id, 'State:', lastTask.status.state);
     }
-
+    
     console.log('=== SWITCH CONTEXT END ===');
   } catch (err) {
     console.error('Error switching context:', err);
@@ -220,13 +212,13 @@ export function createNewContext() {
 export async function clearContext(ctxId: string) {
   try {
     await agentAPI.clearContext(ctxId);
-
+    
     contexts.update(ctxs => ctxs.filter(c => c.id !== ctxId));
-
+    
     if (get(contextId) === ctxId) {
       createNewContext();
     }
-
+    
     addMessage('Context cleared successfully', 'status');
   } catch (err) {
     console.error('Error clearing context:', err);
@@ -293,7 +285,7 @@ export async function sendMessage(text: string) {
 
     // Update current task
     currentTaskId.set(task.id);
-
+    
     // Start polling for response
     startPollingTask(task.id);
   } catch (err) {
@@ -316,7 +308,7 @@ function startPollingTask(taskId: string) {
     try {
       const task = await agentAPI.getTask(taskId);
       const history = task.history || [];
-
+      
       // Add new assistant messages
       if (history.length > lastHistoryLength) {
         for (let i = lastHistoryLength; i < history.length; i++) {
@@ -325,7 +317,7 @@ function startPollingTask(taskId: string) {
             const textParts = (msg.parts || [])
               .filter(part => part.kind === 'text')
               .map(part => part.text || '');
-
+            
             if (textParts.length > 0) {
               addMessage(textParts.join('\n'), 'assistant', task.id, task.status.state);
             }

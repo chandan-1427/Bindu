@@ -7,10 +7,10 @@
 	import FeedbackModal from "./FeedbackModal.svelte";
 	import { submitTaskFeedback } from "$lib/utils/agentMessageHandler";
 
-	let {
+	let { 
 		message,
 		onReply
-	}: {
+	}: { 
 		message: Message;
 		onReply?: (taskId: string) => void;
 	} = $props();
@@ -38,7 +38,7 @@
 	}
 
 	function getStatusLabel(status: string): string {
-		return status.split('-').map(word =>
+		return status.split('-').map(word => 
 			word.charAt(0).toUpperCase() + word.slice(1)
 		).join(' ');
 	}
@@ -167,7 +167,7 @@
 									Reply to This Task
 								</button>
 							{/if}
-
+							
 							<!-- Feedback Button -->
 							<button
 								onclick={() => {

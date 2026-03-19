@@ -31,7 +31,7 @@ export class AgentAPI {
     console.log('AgentAPI.setAuthToken called with:', token ? `${token.substring(0, 20)}...` : 'null');
     this.authToken = token;
     console.log('Token stored in AgentAPI instance:', this.authToken ? 'YES' : 'NO');
-
+    
     if (typeof window !== 'undefined') {
       if (token) {
         localStorage.setItem('bindu_oauth_token', token);
@@ -57,7 +57,7 @@ export class AgentAPI {
     console.log('getHeaders - token retrieved:', token ? `${token.substring(0, 30)}...` : 'NULL');
     console.log('getHeaders - this.authToken:', this.authToken ? `${this.authToken.substring(0, 30)}...` : 'NULL');
     console.log('getHeaders - localStorage token:', typeof window !== 'undefined' ? localStorage.getItem('bindu_oauth_token')?.substring(0, 30) + '...' : 'N/A');
-
+    
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
       console.log('✅ Authorization header added');
@@ -70,16 +70,16 @@ export class AgentAPI {
 
   private async request<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     const requestId = crypto.randomUUID();
-
+    
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-
+    
     // Only add Authorization header if token exists (auth is optional)
     if (this.authToken) {
       headers['Authorization'] = `Bearer ${this.authToken}`;
     }
-
+    
     const body = {
       jsonrpc: '2.0',
       method,
@@ -189,7 +189,7 @@ export class AgentAPI {
     }
 
     const data = await response.json();
-
+    
     if (data.error) {
       yield { type: 'status', status: 'error' };
       throw new Error(data.error.message || 'Agent API error');

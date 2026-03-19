@@ -25,10 +25,10 @@
 			submitting = true;
 			error = "";
 			await onSubmit(feedback, rating);
-
+			
 			// Show success message
 			success = true;
-
+			
 			// Auto-close after 1.5 seconds
 			setTimeout(() => {
 				onClose();

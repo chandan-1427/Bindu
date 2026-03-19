@@ -7,10 +7,10 @@ import { z } from "zod";
 import { config } from "$lib/server/config";
 import type { Endpoint, EndpointMessage } from "../endpoints";
 import { binduResponseToStream } from "./binduToTextGenerationStream";
-import type {
-	BinduMessage,
-	Part,
-	MessageSendParams,
+import type { 
+	BinduMessage, 
+	Part, 
+	MessageSendParams, 
 	BinduJsonRpcRequest,
 	Task,
 	TaskState
@@ -129,7 +129,7 @@ function buildMessageHistory(
 			taskId,
 		};
 		history.push(binduMsg);
-
+		
 		// Track last user message's task ID for continuity
 		if (msg.from === "user") {
 			lastTaskId = taskId;
@@ -164,7 +164,7 @@ export async function endpointBindu(
 
 		// Use conversation ID as context ID for continuity
 		// Convert MongoDB ObjectId (24 chars) to UUID format (32 chars hex)
-		const contextId = conversationId
+		const contextId = conversationId 
 			? conversationId.toString().padEnd(32, '0')  // Pad to 32 chars for UUID format
 			: crypto.randomUUID();
 
@@ -255,7 +255,7 @@ export async function endpointBindu(
 		// Step 2: Poll for task completion
 		const pollInterval = 1000; // Poll every 1 second (matches legacy UI)
 		const maxAttempts = 300; // Max 5 minutes (300 * 1000ms)
-
+		
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
 			if (abortSignal?.aborted) {
 				throw new Error("Request aborted");
@@ -289,7 +289,7 @@ export async function endpointBindu(
 			}
 
 			const statusResult = await statusResponse.json();
-
+			
 			if (statusResult.error) {
 				throw new Error(`Task status error: ${statusResult.error.message}`);
 			}
@@ -301,7 +301,7 @@ export async function endpointBindu(
 			}
 
 			const taskState = task.status.state;
-
+			
 			// Terminal states - task is IMMUTABLE
 			if (TERMINAL_STATES.includes(taskState)) {
 				// Clear payment token when task reaches terminal state
@@ -316,9 +316,9 @@ export async function endpointBindu(
 					});
 					return binduResponseToStream(mockResponse);
 				} else if (taskState === "failed") {
-					const errorMsg = task.metadata?.error ||
-						task.metadata?.error_message ||
-						task.status?.message ||
+					const errorMsg = task.metadata?.error || 
+						task.metadata?.error_message || 
+						task.status?.message || 
 						"Task failed";
 					throw new Error(`Task failed: ${errorMsg}`);
 				} else if (taskState === "canceled") {

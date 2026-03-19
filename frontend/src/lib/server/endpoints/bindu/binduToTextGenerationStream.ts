@@ -48,15 +48,15 @@ export async function* binduToTextGenerationStream(
 	}
 
 	let text = "";
-
+	
 	// Result IS the task directly (not result.task)
 	const task = response.result;
-
+	
 	// Try to extract from artifacts first (completed tasks)
 	if (task && Array.isArray(task.artifacts) && task.artifacts.length > 0) {
 		text = extractTextFromArtifacts(task.artifacts);
 	}
-
+	
 	// If no artifacts, check history for assistant messages (input-required, etc.)
 	if (!text && task && Array.isArray(task.history)) {
 		// Get the last assistant/agent message from history
@@ -74,7 +74,7 @@ export async function* binduToTextGenerationStream(
 			}
 		}
 	}
-
+	
 	// Fallback: check for simple response format
 	if (!text && response.result && 'response' in response.result) {
 		text = String(response.result.response || "");
@@ -83,7 +83,7 @@ export async function* binduToTextGenerationStream(
 	if (!text && response.result && 'message' in response.result) {
 		text = String(response.result.message || "");
 	}
-
+	
 	// If still no text, return empty response instead of throwing error
 	// This handles cases like initial task creation or states without content
 	if (!text) {

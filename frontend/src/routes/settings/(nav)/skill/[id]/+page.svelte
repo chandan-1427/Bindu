@@ -64,7 +64,7 @@
 	// Reactive effect that runs whenever page.params.id changes
 	$effect(() => {
 		const skillId = page.params.id;
-
+		
 		// Reset state when skill ID changes
 		loading = true;
 		error = null;

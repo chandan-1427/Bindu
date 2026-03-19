@@ -40,33 +40,20 @@
 	let isWritingMessage = false; // Guard to prevent concurrent writeMessage calls
 
 	let files: File[] = $state([]);
-
+	
 	// Track current task for A2A protocol compliance
 	let currentTaskId: string | null = $state(null);
 	let currentTaskState: string | null = $state(null);
-
+	
 	// Reply-to-task threading (explicit reply target)
 	let replyToTaskId: string | null = $state(null);
-
+	
 	function setReplyTo(taskId: string) {
 		replyToTaskId = taskId;
 	}
-
+	
 	function clearReply() {
 		replyToTaskId = null;
-	}
-
-	async function handleClearTasks() {
-		// UI-only: reset local task threading state so next message starts fresh.
-		currentTaskId = null;
-		currentTaskState = null;
-		clearReply();
-	}
-
-	async function handleClearContext() {
-		// Frontend-only: for per-conversation chats, we can at least reset local state.
-		// If the backend/agent is unreachable, we still keep the UI understandable.
-		await handleClearTasks();
 	}
 
 	let conversations = $state(data.conversations);
@@ -142,9 +129,9 @@
 			console.warn('⚠️ writeMessage already in progress, ignoring duplicate call');
 			return;
 		}
-
+		
 		isWritingMessage = true;
-
+		
 		try {
 			$isAborted = false;
 			$loading = true;
@@ -256,7 +243,7 @@
 			const useDirectAgentAPI = currentModel?.id === 'bindu' || currentModel?.name === 'bindu';
 
 			let messageUpdatesIterator;
-
+			
 			if (useDirectAgentAPI) {
 				// Use direct agent API with task state tracking and reply support
 				messageUpdatesIterator = sendAgentMessage(
@@ -265,8 +252,7 @@
 					messageUpdatesAbortController.signal,
 					currentTaskId ?? undefined,
 					currentTaskState ?? undefined,
-					replyToTaskId ?? undefined,
-                                        isRetry ? userMessage?.files : base64Files
+					replyToTaskId ?? undefined
 				);
 				// Clear reply after sending
 				clearReply();
@@ -286,7 +272,7 @@
 					error.set(err.message);
 				});
 			}
-
+			
 			if (messageUpdatesIterator === undefined) return;
 
 			files = [];
@@ -383,11 +369,11 @@
 							...(update.referenceTaskIds && { referenceTaskIds: update.referenceTaskIds })
 						};
 						messageToWriteTo.updates = [...(messageToWriteTo.updates ?? []), update];
-
+						
 						// Track task state for A2A protocol compliance
 						currentTaskId = update.taskId;
 						currentTaskState = update.status;
-
+						
 						// Note: Don't invalidate conversation list here for agent conversations
 						// as it causes data reload which clears the local message state
 						break;
@@ -396,7 +382,7 @@
 						messageToWriteTo.updates = [...(messageToWriteTo.updates ?? []), update];
 				}
 			}
-
+			
 			// Flush any remaining buffer
 			if (buffer && !$settings.disableStream) {
 				messageToWriteTo.content += buffer;
@@ -560,8 +546,6 @@
 	onReplyToTask={setReplyTo}
 	replyToTaskId={replyToTaskId}
 	onClearReply={clearReply}
-	onClearContext={handleClearContext}
-	onClearTasks={handleClearTasks}
 	models={data.models}
 	currentModel={findCurrentModel(data.models, data.oldModels, data.model)}
 />

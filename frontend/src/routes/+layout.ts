@@ -75,7 +75,7 @@ export const load = async ({ depends, fetch, url }) => {
 
 	// Note: Agent contexts will be loaded client-side in the layout component
 	// to avoid SSR issues with localStorage access
-
+	
 	return {
 		conversations,
 		models,

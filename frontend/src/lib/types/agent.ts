@@ -1,4 +1,4 @@
-export type TaskState =
+export type TaskState = 
   | 'submitted'
   | 'working'
   | 'input-required'

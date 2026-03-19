@@ -279,7 +279,7 @@ export async function fetchAgentMessageUpdates(
 	abortSignal: AbortSignal
 ): Promise<AsyncGenerator<MessageUpdate>> {
 	const { agentAPI } = await import('$lib/services/agent-api');
-
+	
 	return agentAPI.sendMessageStream(
 		opts.inputs || '',
 		contextId,
