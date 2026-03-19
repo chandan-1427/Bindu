@@ -15,15 +15,12 @@ class TestTaskHandlers:
         mock_storage = AsyncMock()
         mock_task = {"id": "task123", "status": {"state": "completed"}}
         mock_storage.load_task.return_value = mock_task
-        
-        handler = TaskHandlers(
-            scheduler=Mock(),
-            storage=mock_storage
-        )
+
+        handler = TaskHandlers(scheduler=Mock(), storage=mock_storage)
         request = {"jsonrpc": "2.0", "id": "1", "params": {"task_id": "task123"}}
-        
+
         response = await handler.get_task(request)
-        
+
         assert response["jsonrpc"] == "2.0"
         assert response["result"]["id"] == "task123"
 
@@ -32,17 +29,17 @@ class TestTaskHandlers:
         """Test getting non-existent task."""
         mock_storage = AsyncMock()
         mock_storage.load_task.return_value = None
-        
+
         mock_error_creator = Mock(return_value={"error": "not found"})
         handler = TaskHandlers(
             scheduler=Mock(),
             storage=mock_storage,
-            error_response_creator=mock_error_creator
+            error_response_creator=mock_error_creator,
         )
         request = {"jsonrpc": "2.0", "id": "2", "params": {"task_id": "invalid"}}
-        
+
         response = await handler.get_task(request)
-        
+
         assert "error" in response
 
     @pytest.mark.asyncio
@@ -51,17 +48,14 @@ class TestTaskHandlers:
         mock_storage = AsyncMock()
         mock_storage.list_tasks.return_value = [
             {"id": "task1", "status": {"state": "running"}},
-            {"id": "task2", "status": {"state": "completed"}}
+            {"id": "task2", "status": {"state": "completed"}},
         ]
-        
-        handler = TaskHandlers(
-            scheduler=Mock(),
-            storage=mock_storage
-        )
+
+        handler = TaskHandlers(scheduler=Mock(), storage=mock_storage)
         request = {"jsonrpc": "2.0", "id": "3", "params": {"length": 10}}
-        
+
         response = await handler.list_tasks(request)
-        
+
         assert len(response["result"]) == 2
 
     @pytest.mark.asyncio
@@ -71,11 +65,8 @@ class TestTaskHandlers:
         mock_task = {"id": "task123", "status": {"state": "completed"}}
         mock_storage.load_task.return_value = mock_task
         mock_storage.store_task_feedback = AsyncMock()
-        
-        handler = TaskHandlers(
-            scheduler=Mock(),
-            storage=mock_storage
-        )
+
+        handler = TaskHandlers(scheduler=Mock(), storage=mock_storage)
         request = {
             "jsonrpc": "2.0",
             "id": "4",
@@ -83,11 +74,11 @@ class TestTaskHandlers:
                 "task_id": "task123",
                 "feedback": "Great!",
                 "rating": 5,
-                "metadata": {}
-            }
+                "metadata": {},
+            },
         }
-        
+
         response = await handler.task_feedback(request)
-        
+
         assert "Feedback submitted successfully" in response["result"]["message"]
         mock_storage.store_task_feedback.assert_called_once()

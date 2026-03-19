@@ -16,21 +16,26 @@ class TestMessageHandlers:
         mock_storage = AsyncMock()
         mock_task = {
             "id": "task123",
-            "status": {"state": "running", "timestamp": datetime.now(timezone.utc).isoformat()}
+            "status": {
+                "state": "running",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
         }
         mock_storage.load_task.return_value = mock_task
-        
-        handler = MessageHandlers(
-            scheduler=Mock(),
-            storage=mock_storage
-        )
-        
-        task = {"id": "task123"}  # type: ignore
+
+        handler = MessageHandlers(scheduler=Mock(), storage=mock_storage)
+
+        task = {"id": "task123"}
         error = Exception("Test error")
         terminal_states = frozenset(["completed", "failed", "canceled"])
-        
-        result = await handler._handle_stream_error(task, "ctx1", error, terminal_states)  # type: ignore
-        
+
+        result = await handler._handle_stream_error(
+            task,
+            "ctx1",
+            error,
+            terminal_states,  # type: ignore[arg-type]
+        )
+
         assert "kind" in result
         assert result["kind"] == "status-update"
         assert result["task_id"] == "task123"
@@ -42,26 +47,31 @@ class TestMessageHandlers:
         mock_storage = AsyncMock()
         mock_task = {
             "id": "task123",
-            "status": {"state": "running", "timestamp": datetime.now(timezone.utc).isoformat()}
+            "status": {
+                "state": "running",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
         }
         updated_task = {
             "id": "task123",
-            "status": {"state": "failed", "timestamp": datetime.now(timezone.utc).isoformat()}
+            "status": {
+                "state": "failed",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
         }
         mock_storage.load_task.return_value = mock_task
         mock_storage.update_task.return_value = updated_task
-        
-        handler = MessageHandlers(
-            scheduler=Mock(),
-            storage=mock_storage
-        )
-        
-        task = {"id": "task123"}  # type: ignore
+
+        handler = MessageHandlers(scheduler=Mock(), storage=mock_storage)
+
+        task = {"id": "task123"}
         error = Exception("Test error")
         terminal_states = frozenset(["completed", "failed", "canceled"])
-        
-        result = await handler._handle_stream_error(task, "ctx1", error, terminal_states)  # type: ignore
-        
+
+        result = await handler._handle_stream_error(
+            task, "ctx1", error, terminal_states
+        )  # type: ignore[arg-type]
+
         assert result["status"]["state"] == "failed"
         assert result["final"] is True
         mock_storage.update_task.assert_called_once_with("task123", state="failed")
@@ -71,17 +81,16 @@ class TestMessageHandlers:
         """Test stream error handler when task load fails."""
         mock_storage = AsyncMock()
         mock_storage.load_task.side_effect = Exception("Load failed")
-        
-        handler = MessageHandlers(
-            scheduler=Mock(),
-            storage=mock_storage
-        )
-        
-        task = {"id": "task123"}  # type: ignore
+
+        handler = MessageHandlers(scheduler=Mock(), storage=mock_storage)
+
+        task = {"id": "task123"}
         error = Exception("Test error")
         terminal_states = frozenset(["completed", "failed", "canceled"])
-        
-        result = await handler._handle_stream_error(task, "ctx1", error, terminal_states)  # type: ignore
-        
+
+        result = await handler._handle_stream_error(
+            task, "ctx1", error, terminal_states
+        )  # type: ignore[arg-type]
+
         assert "kind" in result
         assert result["status"]["state"] == "failed"

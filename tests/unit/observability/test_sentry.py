@@ -1,7 +1,6 @@
 """Focused tests for Sentry error tracking integration."""
 
-from unittest.mock import patch, Mock
-import pytest
+from unittest.mock import patch
 
 from bindu.observability.sentry import (
     init_sentry,
@@ -17,9 +16,9 @@ class TestSentryInit:
     def test_init_when_disabled(self, mock_settings):
         """Test that init returns False when Sentry is disabled."""
         mock_settings.sentry.enabled = False
-        
+
         result = init_sentry()
-        
+
         assert result is False
 
     @patch("bindu.observability.sentry.app_settings")
@@ -27,9 +26,9 @@ class TestSentryInit:
         """Test that init returns False when DSN is missing."""
         mock_settings.sentry.enabled = True
         mock_settings.sentry.dsn = None
-        
+
         result = init_sentry()
-        
+
         assert result is False
 
     @patch("bindu.observability.sentry.app_settings")
@@ -51,15 +50,14 @@ class TestSentryInit:
         mock_settings.sentry.debug = False
         mock_settings.sentry.ignore_errors = []
         mock_settings.project.version = "1.0.0"
-        
+
         mock_socket.gethostname.return_value = "test-server"
-        
+
         with patch("builtins.__import__", side_effect=ImportError()):
             result = init_sentry()
-        
+
         # Should fail gracefully when sentry_sdk not available
         assert result is False
-
 
 
 class TestBeforeSend:
@@ -71,13 +69,13 @@ class TestBeforeSend:
             "request": {
                 "headers": {
                     "authorization": "Bearer secret-token",
-                    "content-type": "application/json"
+                    "content-type": "application/json",
                 }
             }
         }
-        
+
         result = _before_send(event, {})
-        
+
         assert result is not None
         assert result["request"]["headers"]["authorization"] == "[Filtered]"
         assert result["request"]["headers"]["content-type"] == "application/json"
@@ -89,13 +87,13 @@ class TestBeforeSend:
                 "data": {
                     "username": "user123",
                     "password": "secret123",
-                    "api_key": "key123"
+                    "api_key": "key123",
                 }
             }
         }
-        
+
         result = _before_send(event, {})
-        
+
         assert result is not None
         assert result["request"]["data"]["username"] == "user123"
         assert result["request"]["data"]["password"] == "[Filtered]"
@@ -103,13 +101,10 @@ class TestBeforeSend:
 
     def test_no_scrubbing_when_no_sensitive_data(self):
         """Test that events without sensitive data pass through."""
-        event = {
-            "message": "An error occurred",
-            "level": "error"
-        }
-        
+        event = {"message": "An error occurred", "level": "error"}
+
         result = _before_send(event, {})
-        
+
         assert result == event
 
     def test_scrub_multiple_sensitive_headers(self):
@@ -120,13 +115,13 @@ class TestBeforeSend:
                     "authorization": "Bearer token",
                     "x-api-key": "secret",
                     "cookie": "session=abc123",
-                    "user-agent": "Mozilla/5.0"
+                    "user-agent": "Mozilla/5.0",
                 }
             }
         }
-        
+
         result = _before_send(event, {})
-        
+
         assert result is not None
         assert result["request"]["headers"]["authorization"] == "[Filtered]"
         assert result["request"]["headers"]["x-api-key"] == "[Filtered]"
@@ -141,33 +136,33 @@ class TestBeforeSendTransaction:
     def test_filter_health_check_transaction(self, mock_settings):
         """Test that health check transactions are filtered out."""
         mock_settings.sentry.filter_transactions = ["/health", "/metrics"]
-        
+
         event = {"transaction": "/health"}
-        
+
         result = _before_send_transaction(event, {})
-        
+
         assert result is None
 
     @patch("bindu.observability.sentry.app_settings")
     def test_allow_normal_transaction(self, mock_settings):
         """Test that normal transactions pass through."""
         mock_settings.sentry.filter_transactions = ["/health", "/metrics"]
-        
+
         event = {"transaction": "/api/agent/send_message"}
-        
+
         result = _before_send_transaction(event, {})
-        
+
         assert result == event
 
     @patch("bindu.observability.sentry.app_settings")
     def test_filter_metrics_endpoint(self, mock_settings):
         """Test filtering of metrics endpoint."""
         mock_settings.sentry.filter_transactions = ["/metrics"]
-        
+
         event = {"transaction": "/metrics"}
-        
+
         result = _before_send_transaction(event, {})
-        
+
         assert result is None
 
 
@@ -176,13 +171,9 @@ class TestSentryEdgeCases:
 
     def test_before_send_with_non_dict_data(self):
         """Test before_send handles non-dict request data."""
-        event = {
-            "request": {
-                "data": "string data instead of dict"
-            }
-        }
-        
+        event = {"request": {"data": "string data instead of dict"}}
+
         result = _before_send(event, {})
-        
+
         # Should not crash, just return event unchanged
         assert result == event

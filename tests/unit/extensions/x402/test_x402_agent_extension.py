@@ -10,11 +10,8 @@ class TestX402AgentExtensionInitialization:
 
     def test_init_with_minimal_params(self):
         """Test initialization with minimal required parameters."""
-        ext = X402AgentExtension(
-            amount="1000000",
-            pay_to_address="0x1234567890abcdef"
-        )
-        
+        ext = X402AgentExtension(amount="1000000", pay_to_address="0x1234567890abcdef")
+
         assert ext.amount == "1000000"
         assert ext.token == "USDC"
         assert ext.network == "base-sepolia"
@@ -29,9 +26,9 @@ class TestX402AgentExtensionInitialization:
             network="ethereum-mainnet",
             pay_to_address="0xabcdef1234567890",
             required=False,
-            description="Payment for service"
+            description="Payment for service",
         )
-        
+
         assert ext.amount == "2000000"
         assert ext.token == "USDT"
         assert ext.network == "ethereum-mainnet"
@@ -51,12 +48,8 @@ class TestX402AgentExtensionInitialization:
 
     def test_init_missing_pay_to_address_when_not_required(self):
         """Test that missing pay_to_address is allowed when required=False."""
-        ext = X402AgentExtension(
-            amount="1000000",
-            pay_to_address="",
-            required=False
-        )
-        
+        ext = X402AgentExtension(amount="1000000", pay_to_address="", required=False)
+
         assert ext.pay_to_address == ""
         assert ext.required is False
 
@@ -71,18 +64,18 @@ class TestX402AgentExtensionWithPaymentOptions:
                 "amount": "1000000",
                 "token": "USDC",
                 "network": "base-sepolia",
-                "pay_to_address": "0x1234"
+                "pay_to_address": "0x1234",
             },
             {
                 "amount": "2000000",
                 "token": "USDT",
                 "network": "ethereum-mainnet",
-                "pay_to_address": "0x5678"
-            }
+                "pay_to_address": "0x5678",
+            },
         ]
-        
+
         ext = X402AgentExtension(payment_options=payment_options)
-        
+
         # Should use first option as primary
         assert ext.amount == "1000000"
         assert ext.token == "USDC"
@@ -92,19 +85,12 @@ class TestX402AgentExtensionWithPaymentOptions:
 
     def test_init_with_payment_options_uses_defaults(self):
         """Test that payment_options can use default values."""
-        payment_options = [
-            {
-                "amount": "1000000",
-                "pay_to_address": "0x1234"
-            }
-        ]
-        
+        payment_options = [{"amount": "1000000", "pay_to_address": "0x1234"}]
+
         ext = X402AgentExtension(
-            payment_options=payment_options,
-            token="DAI",
-            network="polygon"
+            payment_options=payment_options, token="DAI", network="polygon"
         )
-        
+
         # Should use defaults for missing fields
         assert ext.token == "DAI"
         assert ext.network == "polygon"
@@ -126,13 +112,8 @@ class TestX402AgentExtensionWithPaymentOptions:
 
     def test_init_with_payment_options_missing_pay_to_address(self):
         """Test that missing pay_to_address in payment_options raises error when required."""
-        payment_options = [
-            {
-                "amount": "1000000",
-                "token": "USDC"
-            }
-        ]
-        
+        payment_options = [{"amount": "1000000", "token": "USDC"}]
+
         with pytest.raises(ValueError, match="pay_to_address is required"):
             X402AgentExtension(payment_options=payment_options, required=True)
 
@@ -146,11 +127,11 @@ class TestX402AgentExtensionMethods:
             amount="1000000",
             token="USDC",
             network="base-sepolia",
-            pay_to_address="0x1234567890abcdef1234567890"
+            pay_to_address="0x1234567890abcdef1234567890",
         )
-        
+
         repr_str = repr(ext)
-        
+
         assert "X402AgentExtension" in repr_str
         assert "amount=1000000" in repr_str
         assert "token=USDC" in repr_str
@@ -160,16 +141,13 @@ class TestX402AgentExtensionMethods:
 
     def test_agent_extension_property(self):
         """Test agent_extension cached property."""
-        ext = X402AgentExtension(
-            amount="1000000",
-            pay_to_address="0x1234"
-        )
-        
+        ext = X402AgentExtension(amount="1000000", pay_to_address="0x1234")
+
         agent_ext = ext.agent_extension
-        
+
         assert "uri" in agent_ext
         assert isinstance(agent_ext["uri"], str)
-        
+
         # Test that it's cached
         agent_ext2 = ext.agent_extension
         assert agent_ext is agent_ext2
@@ -180,32 +158,24 @@ class TestX402AgentExtensionEdgeCases:
 
     def test_init_with_usd_amount_string(self):
         """Test initialization with USD amount string."""
-        ext = X402AgentExtension(
-            amount="$1.00",
-            pay_to_address="0x1234"
-        )
-        
+        ext = X402AgentExtension(amount="$1.00", pay_to_address="0x1234")
+
         assert ext.amount == "$1.00"
 
     def test_init_with_large_amount(self):
         """Test initialization with very large amount."""
         large_amount = "999999999999999999"
-        ext = X402AgentExtension(
-            amount=large_amount,
-            pay_to_address="0x1234"
-        )
-        
+        ext = X402AgentExtension(amount=large_amount, pay_to_address="0x1234")
+
         assert ext.amount == large_amount
 
     def test_init_with_different_tokens(self):
         """Test initialization with different token types."""
         tokens = ["USDC", "USDT", "DAI", "ETH", "MATIC"]
-        
+
         for token in tokens:
             ext = X402AgentExtension(
-                amount="1000000",
-                token=token,
-                pay_to_address="0x1234"
+                amount="1000000", token=token, pay_to_address="0x1234"
             )
             assert ext.token == token
 
@@ -216,25 +186,20 @@ class TestX402AgentExtensionEdgeCases:
             "ethereum-mainnet",
             "polygon",
             "arbitrum",
-            "optimism"
+            "optimism",
         ]
-        
+
         for network in networks:
             ext = X402AgentExtension(
-                amount="1000000",
-                network=network,
-                pay_to_address="0x1234"
+                amount="1000000", network=network, pay_to_address="0x1234"
             )
             assert ext.network == network
 
     def test_init_with_long_pay_to_address(self):
         """Test initialization with full-length Ethereum address."""
         address = "0x" + "a" * 40
-        ext = X402AgentExtension(
-            amount="1000000",
-            pay_to_address=address
-        )
-        
+        ext = X402AgentExtension(amount="1000000", pay_to_address=address)
+
         assert ext.pay_to_address == address
 
     def test_init_with_multiple_payment_options_preserves_all(self):
@@ -242,11 +207,11 @@ class TestX402AgentExtensionEdgeCases:
         payment_options = [
             {"amount": "1000000", "token": "USDC", "pay_to_address": "0x1"},
             {"amount": "2000000", "token": "USDT", "pay_to_address": "0x2"},
-            {"amount": "3000000", "token": "DAI", "pay_to_address": "0x3"}
+            {"amount": "3000000", "token": "DAI", "pay_to_address": "0x3"},
         ]
-        
+
         ext = X402AgentExtension(payment_options=payment_options)
-        
+
         assert ext.payment_options is not None
         assert len(ext.payment_options) == 3
         assert ext.payment_options[1]["token"] == "USDT"
@@ -256,20 +221,14 @@ class TestX402AgentExtensionEdgeCases:
         """Test initialization with description."""
         description = "Payment for AI service execution"
         ext = X402AgentExtension(
-            amount="1000000",
-            pay_to_address="0x1234",
-            description=description
+            amount="1000000", pay_to_address="0x1234", description=description
         )
-        
+
         assert ext._description == description
 
     def test_init_required_false_allows_empty_address(self):
         """Test that required=False allows empty pay_to_address."""
-        ext = X402AgentExtension(
-            amount="1000000",
-            pay_to_address="",
-            required=False
-        )
-        
+        ext = X402AgentExtension(amount="1000000", pay_to_address="", required=False)
+
         assert ext.pay_to_address == ""
         assert ext.required is False

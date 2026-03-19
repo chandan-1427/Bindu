@@ -13,9 +13,6 @@ Most fixtures are now organized in tests/fixtures/ modules for better maintainab
 # These stubs allow tests to run without installing heavy optional dependencies
 # ============================================================================
 
-import sys
-from types import ModuleType
-
 # --- OpenTelemetry Stubs ---
 from tests.conftest_stubs import setup_opentelemetry_stubs, setup_x402_stubs
 
@@ -34,7 +31,7 @@ import pytest  # noqa: E402
 @pytest.fixture(scope="session")
 def event_loop():
     """Create an event loop for the test session.
-    
+
     This fixture ensures all async tests share the same event loop,
     preventing issues with multiple event loops in tests.
     """

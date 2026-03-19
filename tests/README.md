@@ -127,10 +127,10 @@ class TestFeatureName:
         """Test description."""
         # Arrange - Use builders for clean test data creation
         message = MessageBuilder().with_text("Test request").build()
-        
+
         # Act
         task = await memory_storage.submit_task(message["context_id"], message)
-        
+
         # Assert - Use custom assertions
         loaded = await memory_storage.load_task(task["id"])
         assert_task_state(loaded, "submitted")

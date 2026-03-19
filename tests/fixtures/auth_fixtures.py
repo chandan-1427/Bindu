@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 @pytest.fixture
 def mock_hydra_client() -> MagicMock:
     """Create a mock Hydra OAuth client for testing.
-    
+
     Returns:
         MagicMock: Mock Hydra client with common methods stubbed
     """
@@ -27,7 +27,7 @@ def mock_hydra_client() -> MagicMock:
 @pytest.fixture
 def mock_auth_middleware() -> MagicMock:
     """Create a mock authentication middleware for testing.
-    
+
     Returns:
         MagicMock: Mock middleware that allows all requests
     """

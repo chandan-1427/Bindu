@@ -1,9 +1,7 @@
 """Mock objects and services for testing."""
 
 import pytest
-from typing import cast
 
-from bindu.common.models import AgentManifest
 from tests.mocks import (
     MockAgent,
     MockDIDExtension,
@@ -15,7 +13,7 @@ from tests.mocks import (
 @pytest.fixture
 def mock_agent() -> MockAgent:
     """Create a mock agent that returns normal responses.
-    
+
     Returns:
         MockAgent: Agent that completes tasks successfully
     """
@@ -25,7 +23,7 @@ def mock_agent() -> MockAgent:
 @pytest.fixture
 def mock_agent_input_required() -> MockAgent:
     """Create a mock agent that requires user input.
-    
+
     Returns:
         MockAgent: Agent that requests additional input
     """
@@ -35,7 +33,7 @@ def mock_agent_input_required() -> MockAgent:
 @pytest.fixture
 def mock_agent_auth_required() -> MockAgent:
     """Create a mock agent that requires authentication.
-    
+
     Returns:
         MockAgent: Agent that requests authentication
     """
@@ -45,7 +43,7 @@ def mock_agent_auth_required() -> MockAgent:
 @pytest.fixture
 def mock_agent_error() -> MockAgent:
     """Create a mock agent that raises errors.
-    
+
     Returns:
         MockAgent: Agent that fails execution
     """
@@ -55,10 +53,10 @@ def mock_agent_error() -> MockAgent:
 @pytest.fixture
 def mock_manifest(mock_agent: MockAgent) -> MockManifest:
     """Create a mock agent manifest with default configuration.
-    
+
     Args:
         mock_agent: The mock agent to use in the manifest
-        
+
     Returns:
         MockManifest: Manifest with basic capabilities
     """
@@ -68,7 +66,7 @@ def mock_manifest(mock_agent: MockAgent) -> MockManifest:
 @pytest.fixture
 def mock_manifest_with_push() -> MockManifest:
     """Create a mock manifest with push notifications enabled.
-    
+
     Returns:
         MockManifest: Manifest with push notification capability
     """
@@ -78,7 +76,7 @@ def mock_manifest_with_push() -> MockManifest:
 @pytest.fixture
 def mock_did_extension() -> MockDIDExtension:
     """Create a mock DID extension for testing.
-    
+
     Returns:
         MockDIDExtension: DID extension with signing capabilities
     """
@@ -88,7 +86,7 @@ def mock_did_extension() -> MockDIDExtension:
 @pytest.fixture
 def mock_notification_service() -> MockNotificationService:
     """Create a mock notification service for testing.
-    
+
     Returns:
         MockNotificationService: Service for sending notifications
     """

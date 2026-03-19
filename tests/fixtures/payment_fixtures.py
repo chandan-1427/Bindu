@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 @pytest.fixture
 def mock_payment_requirements() -> dict:
     """Create mock payment requirements for testing.
-    
+
     Returns:
         dict: Valid payment requirements structure
     """
@@ -28,7 +28,7 @@ def mock_payment_requirements() -> dict:
 @pytest.fixture
 def mock_payment_payload() -> dict:
     """Create mock payment payload for testing.
-    
+
     Returns:
         dict: Valid payment payload structure
     """
@@ -46,7 +46,7 @@ def mock_payment_payload() -> dict:
 @pytest.fixture
 def mock_facilitator_client() -> MagicMock:
     """Create a mock facilitator client for payment verification.
-    
+
     Returns:
         MagicMock: Mock facilitator client with async methods
     """

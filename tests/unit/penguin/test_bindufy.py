@@ -1,6 +1,6 @@
 """Minimal tests for bindufy module."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 import pytest
 from uuid import UUID
 
@@ -19,10 +19,10 @@ class TestBindufyUtilities:
         """Test that agent ID generation is deterministic."""
         config1 = {"author": "test@example.com", "name": "TestAgent"}
         config2 = {"author": "test@example.com", "name": "TestAgent"}
-        
+
         id1 = _generate_agent_id(config1)
         id2 = _generate_agent_id(config2)
-        
+
         assert isinstance(id1, UUID)
         assert id1 == id2
 
@@ -30,18 +30,18 @@ class TestBindufyUtilities:
         """Test that different inputs produce different IDs."""
         config1 = {"author": "test@example.com", "name": "Agent1"}
         config2 = {"author": "test@example.com", "name": "Agent2"}
-        
+
         id1 = _generate_agent_id(config1)
         id2 = _generate_agent_id(config2)
-        
+
         assert id1 != id2
 
     def test_normalize_execution_costs_single_dict(self):
         """Test normalizing single dict to list."""
         cost = {"amount": "100", "token": "USDC", "network": "base"}
-        
+
         result = _normalize_execution_costs(cost)
-        
+
         assert isinstance(result, list)
         assert len(result) == 1
         assert result[0]["amount"] == "100"
@@ -50,11 +50,11 @@ class TestBindufyUtilities:
         """Test normalizing list of dicts."""
         costs = [
             {"amount": "100", "token": "USDC", "network": "base"},
-            {"amount": "200", "token": "ETH", "network": "ethereum"}
+            {"amount": "200", "token": "ETH", "network": "ethereum"},
         ]
-        
+
         result = _normalize_execution_costs(costs)
-        
+
         assert isinstance(result, list)
         assert len(result) == 2
 
@@ -70,10 +70,17 @@ class TestBindufyUtilities:
 
     def test_setup_x402_extension(self):
         """Test creating X402 extension from costs."""
-        costs = [{"amount": "100", "token": "USDC", "network": "base-sepolia", "pay_to_address": "0x123"}]
-        
+        costs = [
+            {
+                "amount": "100",
+                "token": "USDC",
+                "network": "base-sepolia",
+                "pay_to_address": "0x123",
+            }
+        ]
+
         extension = _setup_x402_extension(costs)
-        
+
         assert extension is not None
         assert extension.amount == "100"
         assert extension.token == "USDC"
@@ -82,9 +89,9 @@ class TestBindufyUtilities:
         """Test parsing deployment URL with port."""
         mock_config = Mock()
         mock_config.url = "http://localhost:8080"
-        
+
         host, port = _parse_deployment_url(mock_config)
-        
+
         assert host == "localhost"
         assert port == 8080
 
@@ -92,15 +99,15 @@ class TestBindufyUtilities:
         """Test parsing deployment URL without port uses default."""
         mock_config = Mock()
         mock_config.url = "http://localhost"
-        
+
         host, port = _parse_deployment_url(mock_config)
-        
+
         assert host == "localhost"
         assert port == 3773
 
     def test_parse_deployment_url_none_returns_defaults(self):
         """Test that None config returns default values."""
         host, port = _parse_deployment_url(None)
-        
+
         assert host == "localhost"
         assert port == 3773
