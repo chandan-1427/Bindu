@@ -47,7 +47,15 @@
 
 <br/>
 
----
+<div align="center">
+  <h3>Incorpora tu agente en una sola línea</h3>
+</div>
+
+<div align="center">
+  <pre><code>curl -fsSL https://getbindu.com/install-bindu.sh | bash</code></pre>
+</div>
+
+-----
 
 **Bindu** (se lee: _binduu_) es una capa operativa para agentes de IA que proporciona capacidades de identidad, comunicación y pago. Ofrece un servicio listo para producción con una API conveniente para conectar, autenticar y orquestar agentes a través de sistemas distribuidos utilizando protocolos abiertos: **A2A**, **AP2** y **X402**.Construido con una arquitectura distribuida (Gestor de Tareas, programador, almacenamiento), Bindu facilita el desarrollo rápido y la integración con cualquier marco de IA. Transforma cualquier marco de agente en un servicio completamente interoperable para comunicación, colaboración y comercio en el Internet de los Agentes.
 
@@ -240,7 +248,7 @@ Pruebe Bindu sin configurar Postgres, Redis o cualquier servicio en la nube. Fun
 python examples/beginner_zero_config_agent.py
 ```
 
-### Opción 4: Agente Echo Mínimo (Pruebas)
+### Opción 3: Agente Echo Mínimo (Pruebas)
 
 <details>
 <summary><b>Ver ejemplo mínimo</b> (haga clic para expandir)</summary>
