@@ -47,7 +47,15 @@
 
 <br/>
 
----
+<div align="center">
+  <h3>Onboarden Sie Ihren Agenten in einer Zeile</h3>
+</div>
+
+<div align="center">
+  <pre><code>curl -fsSL https://getbindu.com/install-bindu.sh | bash</code></pre>
+</div>
+
+-----
 
 **Bindu** (ausgesprochen: _binduu_) ist eine Betriebsschicht für KI-Agenten, die Identitäts-, Kommunikations- und Zahlungsfunktionen bereitstellt. Es bietet einen produktionsbereiten Dienst mit einer praktischen API, um Agenten über verteilte Systeme hinweg zu verbinden, zu authentifizieren und zu orchestrieren, unter Verwendung offener Protokolle: **A2A**, **AP2** und **X402**.Mit einer verteilten Architektur (Task-Manager, Scheduler, Speicher) ermöglicht Bindu eine schnelle Entwicklung und einfache Integration mit jedem KI-Framework. Transformieren Sie jedes Agenten-Framework in einen vollständig interoperablen Dienst für Kommunikation, Zusammenarbeit und Handel im Internet der Agenten.
 
