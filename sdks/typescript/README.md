@@ -13,9 +13,9 @@ npm install @bindu/sdk
 **Prerequisite:** The Bindu Python core must be installed on the machine:
 
 ```bash
-pip install bindu[grpc]
+pip install bindu
 # or with uv:
-uv pip install bindu[grpc]
+uv pip install bindu
 ```
 
 The SDK automatically launches the Python core as a background process — you don't need to start it manually.

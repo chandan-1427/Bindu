@@ -221,7 +221,46 @@ $env:BINDU_PORT="4000"
 
 Existing examples that use `http://localhost:3773` are automatically overridden when `BINDU_PORT` is set.
 
-### Option 2: Zero-Config Local Agent
+### Option 2: TypeScript Agent
+
+Same pattern, different language. Create `index.ts`:
+
+```typescript
+import { bindufy } from "@bindu/sdk";
+import OpenAI from "openai";
+
+const openai = new OpenAI();
+
+bindufy({
+  author: "your.email@example.com",
+  name: "research_agent",
+  description: "A research assistant agent",
+  deployment: { url: "http://localhost:3773", expose: true },
+  skills: ["skills/question-answering"],
+}, async (messages) => {
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: messages.map(m => ({
+      role: m.role as "user" | "assistant" | "system",
+      content: m.content,
+    })),
+  });
+  return response.choices[0].message.content || "";
+});
+```
+
+Run it:
+
+```bash
+npm install @bindu/sdk openai
+npx tsx index.ts
+```
+
+The SDK launches the Bindu core automatically in the background. Your agent is live at `http://localhost:3773` — same A2A protocol, same DID, same everything.
+
+> See [examples/typescript-openai-agent/](examples/typescript-openai-agent/) for the full working example with setup instructions.
+
+### Option 3: Zero-Config Local Agent
 
 Try Bindu without setting up Postgres, Redis, or any cloud services. Runs entirely locally using in-memory storage and scheduler.
 
@@ -503,16 +542,60 @@ NightSky enables swarms of agents. Each Bindu is a dot annotating agents with th
 
 <br/>
 
+## 🌍 Language-Agnostic Agents
+
+Bindu isn't limited to Python. Write your agent in **any language** — the gRPC adapter handles the rest.
+
+**Python** (direct, in-process):
+```python
+from bindu.penguin.bindufy import bindufy
+
+bindufy(config, handler)
+```
+
+**TypeScript** (via `@bindu/sdk`):
+```typescript
+import { bindufy } from "@bindu/sdk";
+
+bindufy(config, async (messages) => {
+  const res = await openai.chat.completions.create({ model: "gpt-4o", messages });
+  return res.choices[0].message.content;
+});
+```
+
+**Kotlin** (via `bindu-sdk`):
+```kotlin
+bindufy(config) { messages ->
+    myAgent.run(messages.last().content)
+}
+```
+
+All three produce the same result: a full A2A microservice with DID, auth, x402, scheduling, and storage. The TypeScript/Kotlin SDKs automatically launch the Bindu core in the background — one command, one terminal.
+
+See [examples/](examples/) for working examples and [docs/GRPC_LANGUAGE_AGNOSTIC.md](docs/GRPC_LANGUAGE_AGNOSTIC.md) for full details.
+
+---
+
+<br/>
+
 ## 🛠️ Supported Agent Frameworks
 
 Bindu is **framework-agnostic** and tested with:
 
+**Python:**
 - **AG2** (formerly AutoGen)
 - **Agno**
 - **CrewAI**
 - **LangChain**
 - **LlamaIndex**
 - **FastAgent**
+
+**TypeScript:**
+- **OpenAI SDK**
+- **LangChain.js**
+
+**Kotlin:**
+- **OpenAI Kotlin SDK**
 
 Want integration with your favorite framework? [Let us know on Discord](https://discord.gg/3w5zuYUuwt)!
 
@@ -663,10 +746,11 @@ Grateful to these projects:
 
 ## 🗺️ Roadmap
 
-- [ ] GRPC transport support
+- [x] gRPC transport + language-agnostic SDKs (TypeScript, Kotlin)
 - [ ] Increase test coverage to 80% (in progress)
 - [ ] AP2 end-to-end support
 - [ ] DSPy integration (in progress)
+- [ ] Rust SDK
 - [ ] MLTS support
 - [ ] X402 support with other facilitators
 
