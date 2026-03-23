@@ -45,7 +45,17 @@
   <em>"Comme des tournesols se tournant vers la lumière, les agents collaborent en essaims - chacun indépendant, mais ensemble ils créent quelque chose de plus grand."</em>
 </p>
 
-<br/>
+<br>
+
+<div align="center">
+  <h3>Intégrez votre agent en une seule ligne</h3>
+</div>
+
+<div align="center">
+  <pre><code>curl -fsSL https://getbindu.com/install-bindu.sh | bash</code></pre>
+</div>
+
+-----
 
 ---
 
@@ -240,7 +250,7 @@ Essayez Bindu sans configurer Postgres, Redis ou tout service cloud. Fonctionne 
 python examples/beginner_zero_config_agent.py
 ```
 
-### Option 4 : Agent Echo minimal (Test)
+### Option 3 : Agent Echo minimal (Test)
 
 <details>
 <summary><b>Voir l'exemple minimal</b> (cliquez pour développer)</summary>
