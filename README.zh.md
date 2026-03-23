@@ -47,6 +47,14 @@
 
 <br/>
 
+<div align="center">
+  <h3>一行命令接入你的代理</h3>
+</div>
+
+<div align="center">
+  <pre><code>curl -fsSL https://getbindu.com/install-bindu.sh | bash</code></pre>
+</div>
+
 ---
 
 **Bindu**（读作：_binduu_）是一个为AI代理提供身份、通信和支付能力的操作层。它提供了一个生产就绪的服务，具有方便的API，可以使用开放协议连接、认证和编排分布式系统中的代理：**A2A**、**AP2**和**X402**。构建于分布式架构之上（任务管理器、调度程序、存储），Bindu 使得开发快速且易于与任何 AI 框架集成。将任何代理框架转变为一个完全互操作的服务，以便在代理互联网中进行通信、协作和商业。
