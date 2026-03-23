@@ -47,7 +47,15 @@
 
 <br/>
 
----
+<div align="center">
+  <h3>Onboard je agent in één regel</h3>
+</div>
+
+<div align="center">
+  <pre><code>curl -fsSL https://getbindu.com/install-bindu.sh | bash</code></pre>
+</div>
+
+-----
 
 **Bindu** (uitgesproken als _binduu_) is een operationele laag voor AI-agenten die identiteit, communicatie en betalingsmogelijkheden biedt. Het levert een productieklare service met een handige API om agenten te verbinden, te authenticeren en te orkestreren over gedistribueerde systemen met behulp van open protocollen: **A2A**, **AP2** en **X402**.Gebouwd met een gedistribueerde architectuur (Taakbeheerder, planner, opslag), maakt Bindu het snel om te ontwikkelen en eenvoudig om te integreren met elk AI-framework. Transformeer elk agentframework in een volledig interoperabele service voor communicatie, samenwerking en handel in het Internet van Agents.
 
@@ -232,7 +240,7 @@ $env:BINDU_PORT="4000"
 
 Bestaande voorbeelden die `http://localhost:3773` gebruiken, worden automatisch overschreven wanneer `BINDU_PORT` is ingesteld.
 
-### Optie 3: Zero-Config Lokale Agent
+### Optie 2: Zero-Config Lokale Agent
 
 Probeer Bindu zonder Postgres, Redis of andere cloudservices in te stellen. Draait volledig lokaal met behulp van in-memory opslag en planner.
 
@@ -240,7 +248,7 @@ Probeer Bindu zonder Postgres, Redis of andere cloudservices in te stellen. Draa
 python examples/beginner_zero_config_agent.py
 ```
 
-### Optie 4: Minimale Echo Agent (Testen)
+### Optie 3: Minimale Echo Agent (Testen)
 
 <details>
 <summary><b>Bekijk minimaal voorbeeld</b> (klik om uit te vouwen)</summary>
