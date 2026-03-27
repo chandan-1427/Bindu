@@ -464,7 +464,7 @@ curl --location 'http://localhost:3773/' \
 Bindu `http://localhost:5173` இல் அழகான உரையாடல் இடைமுகத்தை உள்ளடக்கியது. `frontend` கோப்புறைக்கு செல்லவும் மற்றும் சேவையகத்தை தொடங்க `npm run dev` ஐ இயக்கவும்.
 
 <p align="center">
-  <img src="assets/new-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="assets/agent-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
 </p>
 
 ---

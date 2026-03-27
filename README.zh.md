@@ -464,7 +464,7 @@ curl --location 'http://localhost:3773/' \
 Bindu 包含一个美观的聊天界面，位于 `http://localhost:5173`。导航到 `frontend` 文件夹并运行 `npm run dev` 启动服务器。
 
 <p align="center">
-  <img src="assets/new-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="assets/agent-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
 </p>
 
 ---

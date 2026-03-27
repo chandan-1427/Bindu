@@ -462,7 +462,7 @@ curl --location 'http://localhost:3773/' \
 Bindu একটি সুন্দর চ্যাট ইন্টারফেস অন্তর্ভুক্ত করে `http://localhost:5173` এ। `frontend` ফোল্ডারে নেভিগেট করুন এবং সার্ভার শুরু করতে `npm run dev` চালান।
 
 <p align="center">
-  <img src="assets/new-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="assets/agent-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
 </p>
 
 ---
