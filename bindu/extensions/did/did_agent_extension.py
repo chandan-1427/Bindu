@@ -24,7 +24,8 @@ By implementing DID as an extension (https://a2a-protocol.org/v0.3.0/topics/exte
 This extension provides cryptographic identity management using Ed25519 keys and W3C-compliant
 DID documents, enabling agents to establish trust in a decentralized network.
 """
-
+import os
+import platform
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -215,12 +216,19 @@ class DIDAgentExtension:
         private_pem, public_pem = self._generate_key_pair_data()
 
         # Write keys using Path methods
-        self.private_key_path.write_bytes(private_pem)
-        self.public_key_path.write_bytes(public_pem)
+        if platform.system() == "Windows":
+            # Windows does not enforce POSIX permissions — write directly
+            self.private_key_path.write_bytes(private_pem)
+            self.public_key_path.write_bytes(public_pem)
+        else:
+            # POSIX: use os.open to set permissions atomically on creation
+            fd = os.open(str(self.private_key_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "wb") as f:
+                f.write(private_pem)
 
-        # Set appropriate file permissions (owner read/write only for private key)
-        self.private_key_path.chmod(0o600)
-        self.public_key_path.chmod(0o644)
+            fd = os.open(str(self.public_key_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+            with os.fdopen(fd, "wb") as f:
+                f.write(public_pem)    
 
         return {
             "private_key_path": str(self.private_key_path),

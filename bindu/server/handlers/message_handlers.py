@@ -138,16 +138,24 @@ class MessageHandlers:
                 task["id"], push_config, persist=is_long_running
             )
 
-        message_metadata = message.get("metadata", {})
-        if (
-            isinstance(message_metadata, dict)
-            and "_payment_context" in message_metadata
-        ):
-            # Move payment context to scheduler params and strip it from the
-            # message metadata so it is not persisted or forwarded to the agent
-            scheduler_params["payment_context"] = message_metadata["_payment_context"]
-            del message_metadata["_payment_context"]
+        message_metadata = message.get("metadata")
 
+        if message_metadata is None:
+            message_metadata = {}
+            message["metadata"] = message_metadata
+
+        elif not isinstance(message_metadata, dict):
+            logger.warning(
+                "Invalid metadata type received in message",
+                extra={"type": type(message_metadata).__name__},
+            )
+            message["metadata"] = {}
+            message_metadata = message["metadata"]
+
+        # ✅ SAFE payment context handling
+        payment_context = message_metadata.pop("_payment_context", None)
+        if payment_context is not None:
+            scheduler_params["payment_context"] = payment_context
         await self.scheduler.run_task(scheduler_params)
         return task, context_id
 
