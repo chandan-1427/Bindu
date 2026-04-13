@@ -76,9 +76,18 @@ def handler(messages: list[dict[str, str]]) -> str:
             "and return the top 5 posts as JSON with title, url, and points.'"
         )
 
-    latest = messages[-1]
-    task = latest.get("content", "") if isinstance(latest, dict) else str(latest)
-    if not task.strip():
+    latest_user = next(
+        (
+            m
+            for m in reversed(messages)
+            if isinstance(m, dict) and m.get("role") == "user"
+        ),
+        None,
+    )
+    if latest_user is None:
+        return "No user message found — please send a task as a user-role message."
+    task = latest_user.get("content", "")
+    if not isinstance(task, str) or not task.strip():
         return "Empty task — please describe the browser action you want."
 
     with client.Session(

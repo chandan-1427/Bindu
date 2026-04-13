@@ -4,61 +4,44 @@ version: 1.0.0
 author: bindu.builder@getbindu.com
 description: |
   Real-browser automation skill powered by Notte. Navigates JavaScript-rendered
-  pages, fills forms, clicks through multi-step flows, handles authenticated
-  sessions, solves captchas, routes through proxies, and returns strongly-typed
-  Pydantic output. Use whenever the task needs a real browser (not just HTTP)
-  — dynamic pages, logins, e-commerce checkouts, dashboards behind auth, or
-  structured extraction from pages that won't respond to `requests` / `curl`.
+  pages, fills forms, clicks through multi-step flows, solves captchas, and
+  routes through proxies. Use whenever the task needs a real browser (not just
+  HTTP) — dynamic pages, e-commerce flows, or extraction from pages that won't
+  respond to `requests` / `curl`.
 
 tags:
   - browser-automation
   - web-agent
   - web-scraping
   - form-filling
-  - authenticated-session
   - captcha
   - proxies
-  - structured-extraction
-  - pydantic
 
 input_modes:
   - application/json
 
 output_modes:
   - application/json
+  - text/plain
 
 examples:
   - "Go to news.ycombinator.com and return the top 5 posts as JSON with title, url, points, author"
-  - "Log in to https://app.example.com with these credentials and download the latest invoice PDF"
   - "Search 'air force 1' on nike.com, solve any captcha, and return the current price and availability"
-  - "Open my dashboard at https://portal.example.com, navigate to Billing, and extract the current balance"
   - "Fill the contact form at https://example.com/contact with name=Jane, email=jane@ex.com, submit, and confirm the success state"
 
 capabilities_detail:
   real_browser:
     supported: true
     description: "Runs a full Chromium/Firefox session (cloud or local) — JavaScript renders, forms submit, cookies persist"
-  structured_extraction:
-    supported: true
-    description: "Pass a Pydantic BaseModel as `response_format`; the agent returns schema-validated output"
   multi_step_workflows:
     supported: true
     description: "Natural-language task routed through a Notte agent with configurable max_steps and reasoning_model"
-  authenticated_sessions:
-    supported: true
-    description: "Vault-backed credential handling and cookie injection — credentials never enter the task string or logs"
   captcha_solving:
     supported: true
-    description: "Set `solve_captchas=True` on Session for automatic captcha resolution"
+    description: "Set NOTTE_SOLVE_CAPTCHAS=true to enable automatic captcha resolution on the Session"
   proxies:
     supported: true
-    description: "Built-in proxy support including geolocated proxies via `NotteProxy.from_country(...)`"
-  hybrid_scripting:
-    supported: true
-    description: "Mix deterministic `session.execute(...)` calls with agent reasoning for cost and reliability wins"
-  one_shot_scrape:
-    supported: true
-    description: "`client.scrape(url=..., response_format=...)` for pure extraction without agent overhead (5–10x cheaper)"
+    description: "Set NOTTE_USE_PROXIES=true to route traffic through Notte's managed proxies"
 
 assessment:
   keywords:
@@ -68,8 +51,6 @@ assessment:
     - fill
     - form
     - login
-    - authenticated
-    - dashboard
     - captcha
     - proxy
     - dynamic
@@ -78,12 +59,8 @@ assessment:
     - multi-step
     - checkout
     - booking
-    - pydantic
-    - structured
 
   specializations:
-    - domain: authenticated_web_flows
-      confidence_boost: 0.35
     - domain: dynamic_page_extraction
       confidence_boost: 0.3
     - domain: multi_step_web_workflows

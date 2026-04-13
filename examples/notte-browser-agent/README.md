@@ -8,11 +8,11 @@ Notte is unusual among agent building blocks in that it ships both the runtime (
 
 ### Core Capabilities
 - **Real browser**: Cloud Chromium/Firefox session per request — JavaScript renders, forms submit, cookies persist. Not HTTP scraping.
-- **Structured output**: Pass a Pydantic `BaseModel` as `response_format` and get schema-validated JSON back.
-- **Authenticated flows**: `client.Vault()` for safe credential handling; `session.set_cookies(...)` for pre-auth sessions. Credentials never enter the task string.
-- **Captcha solving**: `solve_captchas=True` on the Session handles captchas automatically.
-- **Proxies**: Built-in proxy support, including geolocated proxies via `NotteProxy.from_country(...)`.
+- **Captcha solving**: Set `NOTTE_SOLVE_CAPTCHAS=true` to enable automatic captcha solving on the Session.
+- **Proxies**: Set `NOTTE_USE_PROXIES=true` to route traffic through Notte's managed proxies.
 - **Multi-step workflows**: Natural-language task routed through a configurable agent loop (`max_steps`, `reasoning_model`).
+
+> The Notte SDK also supports `response_format` for Pydantic-validated structured output, `client.Vault()` for credentialed flows, `session.execute(...)` for deterministic scripting, and `client.scrape(...)` for one-shot extraction. This example's handler intentionally wires only the minimal agent path — extend it as needed for those advanced flows.
 
 ### 🔧 Technical Features
 - **Runtime**: Notte hosted cloud (default) or local Chromium via `patchright`.
@@ -74,7 +74,7 @@ messages = [
 
 ### Supported query types
 - **Data extraction from dynamic pages**: "Extract product listings from [URL]" — pages that won't respond to `curl` or `requests`.
-- **Authenticated flows**: "Log in to [URL] and download the latest invoice." Pair with `client.Vault()` for real credentials.
+- **Authenticated flows** (requires extending the handler): pair a task like "Log in and download the latest invoice" with `client.Vault()` credential retrieval — do not pass raw credentials in the task string.
 - **Multi-step workflows**: "Search [query] on [site], apply [filter], and return the top result as JSON."
 - **Captcha / proxy-gated sites**: Set `NOTTE_SOLVE_CAPTCHAS=true` or `NOTTE_USE_PROXIES=true` in `.env`.
 - **E-commerce**: "Find [product] on [shop], select the right variant, and return the final price."
@@ -94,7 +94,7 @@ All runtime options are read from `.env`:
 
 ## 🗂️ Project Structure
 
-```
+```text
 notte-browser-agent/
 ├── notte_browser_agent.py      # Main agent implementation
 ├── .env                        # Environment variables (API keys)
@@ -107,22 +107,22 @@ notte-browser-agent/
 
 ## 🔍 Troubleshooting
 
-#### `NOTTE_API_KEY not set`
+### `NOTTE_API_KEY not set`
 Ensure `.env` exists in `examples/notte-browser-agent/` with a real key from https://console.notte.cc. `load_dotenv()` reads the local `.env`.
 
-#### `ModuleNotFoundError: No module named 'notte_sdk'`
+### `ModuleNotFoundError: No module named 'notte_sdk'`
 Run `uv pip install 'notte>=1.8.12'` (or `pip install 'notte>=1.8.12'` inside your venv).
 
-#### `pydantic_core._pydantic_core.ValidationError: ... extra_forbidden`
+### `pydantic_core._pydantic_core.ValidationError: ... extra_forbidden`
 Your resolved `notte` version is too old. Upgrade with `uv pip install 'notte>=1.8.12'`.
 
-#### Agent returns no answer / "ran out of steps"
+### Agent returns no answer / "ran out of steps"
 Raise `NOTTE_MAX_STEPS` in `.env`, or switch `NOTTE_REASONING_MODEL` to a stronger model (e.g. `anthropic/claude-sonnet-4-5`). Don't just retry with the same config — it will fail identically.
 
-#### Captcha / bot-detection blocks the run
+### Captcha / bot-detection blocks the run
 Set `NOTTE_SOLVE_CAPTCHAS=true` and optionally `NOTTE_USE_PROXIES=true` in `.env`.
 
-#### Credentials in logs
+### Credentials in logs
 Never paste raw credentials into the task string — route them through `client.Vault()` instead. See the [Notte auth docs](https://docs.notte.cc) and the hosted skill at [`agent-skill-notte`](https://github.com/nottelabs/agent-skill-notte).
 
 ## 🔗 References
