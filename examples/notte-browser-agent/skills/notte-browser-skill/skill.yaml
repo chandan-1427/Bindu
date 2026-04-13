@@ -32,7 +32,7 @@ examples:
 capabilities_detail:
   real_browser:
     supported: true
-    description: "Runs a full Chromium/Firefox session (cloud or local) — JavaScript renders, forms submit, cookies persist"
+    description: "Runs a Chromium-based Notte cloud session — JavaScript renders, forms submit, cookies persist. Local or alternate-browser runtimes require passing cdp_url / extra params to client.Session()."
   multi_step_workflows:
     supported: true
     description: "Natural-language task routed through a Notte agent with configurable max_steps and reasoning_model"
