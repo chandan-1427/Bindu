@@ -440,18 +440,18 @@ curl --location 'http://localhost:3773/' \
 ## 🚀 核心功能
 | 特性 | 描述 | 文档 |
 | :--- | :--- | :--- |
-| **身份验证** | 使用 Ory Hydra OAuth2 进行安全的 API 访问（开发时可选） | [Guide →](https://www.google.com/search?q=docs/AUTHENTICATION.md) |
-| 💰 **支付集成 (X402)** | 在执行受保护的方法之前接受 Base 区块链上的 USDC 支付 | [Guide →](https://www.google.com/search?q=docs/PAYMENT.md) |
-| 💾 **PostgreSQL 存储** | 生产部署的持久存储（可选 - 默认使用 InMemoryStorage） | [Guide →](https://www.google.com/search?q=docs/STORAGE.md) |
-| 📋 **Redis 调度器** | 用于多工作者部署的分布式任务调度（可选 - 默认使用 InMemoryScheduler） | [Guide →](https://www.google.com/search?q=docs/SCHEDULER.md) |
-| 🎯 **技能系统** | 代理宣传和执行的可重用能力，用于智能任务路由 | [Guide →](https://www.google.com/search?q=docs/SKILLS.md) |
-| 🤝 **代理协商** | 基于能力的代理选择，用于智能编排 | [Guide →](https://www.google.com/search?q=docs/NEGOTIATION.md) |
-| 🌐 **隧道** | 将本地代理暴露到互联网以进行测试（**仅限本地开发，不适用于生产**） | [Guide →](https://www.google.com/search?q=docs/TUNNELING.md) |
-| 📬 **推送通知** | 实时 webhook 通知任务更新 - 无需轮询 | [Guide →](https://www.google.com/search?q=docs/NOTIFICATIONS.md) |
-| 📊 **可观察性与监控** | 使用 OpenTelemetry 和 Sentry 跟踪性能和调试问题 | [Guide →](https://www.google.com/search?q=docs/OBSERVABILITY.md) |
-| 🔄 **重试机制** | 自动重试，采用指数退避策略以增强代理的韧性 | [Guide →](https://docs.getbindu.com/bindu/learn/retry/overview) |
-| 🔑 **去中心化标识符 (DIDs)** | 用于可验证、安全的代理交互和支付集成的加密身份 | [Guide →](https://www.google.com/search?q=docs/DID.md) |
-| 🏥 **健康检查与指标** | 通过内置端点监控代理的健康和性能 | [Guide →](https://www.google.com/search?q=docs/HEALTH_METRICS.md) |
+| **身份验证** | 使用 Ory Hydra OAuth2 进行安全的 API 访问（开发时可选） | [Guide →](docs/AUTHENTICATION.md) |
+| 💰 **支付集成 (X402)** | 在执行受保护的方法之前接受 Base 区块链上的 USDC 支付 | [Guide →](docs/PAYMENT.md) |
+| 💾 **PostgreSQL 存储** | 生产部署的持久存储（可选 - 默认使用 InMemoryStorage） | [Guide →](docs/STORAGE.md) |
+| 📋 **Redis 调度器** | 用于多工作者部署的分布式任务调度（可选 - 默认使用 InMemoryScheduler） | [Guide →](docs/SCHEDULER.md) |
+| 🎯 **技能系统** | 代理宣传和执行的可重用能力，用于智能任务路由 | [Guide →](docs/SKILLS.md) |
+| 🤝 **代理协商** | 基于能力的代理选择，用于智能编排 | [Guide →](docs/NEGOTIATION.md) |
+| 🌐 **隧道** | 将本地代理暴露到互联网以进行测试（**仅限本地开发，不适用于生产**） | [Guide →](docs/TUNNELING.md) |
+| 📬 **推送通知** | 实时 webhook 通知任务更新 - 无需轮询 | [Guide →](docs/NOTIFICATIONS.md) |
+| 📊 **可观察性与监控** | 使用 OpenTelemetry 和 Sentry 跟踪性能和调试问题 | [Guide →](docs/OBSERVABILITY.md) |
+| 🔄 **重试机制** | 自动重试，采用指数退避策略以增强代理的韧性 | [Guide →](docs.getbindu.com/bindu/learn/retry/overview) |
+| 🔑 **去中心化标识符 (DIDs)** | 用于可验证、安全的代理交互和支付集成的加密身份 | [Guide →](docs/DID.md) |
+| 🏥 **健康检查与指标** | 通过内置端点监控代理的健康和性能 | [Guide →](docs/HEALTH_METRICS.md) |
 
 ---
 
