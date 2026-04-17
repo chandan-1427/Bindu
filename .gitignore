@@ -204,6 +204,9 @@ bindu/penguin/.bindu/private.pem
 bindu/penguin/.bindu/public.pem
 .bindu/
 
+# Claude Code worktrees (local agent scratch space, not for version control)
+.claude/worktrees/
+
 postman/*
 node_modules/
 **/node_modules/
