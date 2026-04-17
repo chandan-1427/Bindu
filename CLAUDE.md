@@ -187,7 +187,7 @@ bindu/
   ```bash
   # Python
   python -m grpc_tools.protoc -I proto --python_out=bindu/grpc/generated --grpc_python_out=bindu/grpc/generated proto/agent_handler.proto
-  
+
   # TypeScript
   cd sdks/typescript
   npm run generate-proto
