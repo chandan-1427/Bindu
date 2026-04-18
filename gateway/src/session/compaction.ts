@@ -70,6 +70,12 @@ export const layer = Layer.effect(
       }
     }
 
+    /** True if the message is the synthetic "prior summary" injected by
+     *  session.history() — has no backing row in gateway_messages. */
+    function isSynthetic(m: MessageWithParts): boolean {
+      return m.parts.some((p) => (p as { synthetic?: boolean }).synthetic === true)
+    }
+
     async function runCompaction(
       history: MessageWithParts[],
       llm: LanguageModel,
@@ -77,8 +83,41 @@ export const layer = Layer.effect(
       sessionID: SessionID,
       abortSignal?: AbortSignal,
     ): Promise<CompactOutcome> {
-      const { head, tail } = splitHead(history, keepTail)
+      // session.history() prepends a synthetic message carrying the prior
+      // compaction_summary (if any). Don't treat it as a real head row —
+      // its id is not in gateway_messages, so the "mark compacted" UPDATE
+      // would silently no-op, AND summarizing the synthetic as part of
+      // `head` would produce a lossy paraphrase-of-paraphrase (the bug
+      // this refactor fixes). Instead, pull the summary text out as
+      // `priorSummary` and feed it to the summarizer explicitly with
+      // facts-preservation instructions.
+      const client = db.client()
       const before = estimateHistoryTokens(history)
+
+      const realHistory = history.filter((m) => !isSynthetic(m))
+      const { head, tail } = splitHead(realHistory, keepTail)
+
+      // Read prior summary directly from the session row so we don't depend
+      // on history()'s synthetic-injection contract (keeps this path
+      // correct even if the caller passed history from a different source).
+      const { data: sessData, error: sessReadErr } = await client
+        .from("gateway_sessions")
+        .select("compaction_summary")
+        .eq("id", sessionID)
+        .maybeSingle()
+      if (sessReadErr) {
+        throw new Error(`compaction: failed to read session: ${sessReadErr.message}`)
+      }
+      const priorSummary =
+        ((sessData as { compaction_summary?: string | null } | null)?.compaction_summary ?? null) || null
+
+      // If there's nothing new to fold in AND no prior summary, we're done.
+      if (head.length === 0 && !priorSummary) {
+        return { compacted: false, tokensBefore: before }
+      }
+      // If there's a prior summary but no new head, the session hasn't
+      // grown since the last compaction. No-op — re-summarizing would
+      // just be a lossy rewrite of the same content.
       if (head.length === 0) {
         return { compacted: false, tokensBefore: before }
       }
@@ -86,32 +125,30 @@ export const layer = Layer.effect(
       const summary = await summarize({
         model: llm,
         messagesToCompact: head,
+        priorSummary,
         abortSignal,
       })
 
-      // Mark the head messages as compacted
-      const client = db.client()
+      // Mark the real head messages as compacted. We filtered synthetic
+      // rows out already, so every id here corresponds to a real row.
       const headIds = head
-        .map((m) => (m.info as any).id as string | undefined)
+        .map((m) => (m.info as { id?: string }).id)
         .filter((x): x is string => !!x)
-
-      // Fetch actual row IDs — message.info.id is our internal MessageID,
-      // but message rows use row.id. For Phase 1 the internal id equals
-      // the row id (we generate it client-side and round-trip via metadata.info).
-      // That's a simplification worth documenting; Phase 2 could reconcile.
-      const idsSQL = headIds
-      if (idsSQL.length > 0) {
+      if (headIds.length > 0) {
         const { error } = await client
           .from("gateway_messages")
           .update({ compacted: true })
           .eq("session_id", sessionID)
-          .in("id", idsSQL)
+          .in("id", headIds)
         if (error) {
           throw new Error(`compaction: failed to mark compacted: ${error.message}`)
         }
       }
 
-      // Store summary on session row
+      // Overwrite compaction_summary with the NEW (superset) summary. Because
+      // summarize() was given the priorSummary and instructed to preserve
+      // every fact in it, the new value is safe to replace — it already
+      // carries forward everything the old one did.
       const { error: sessErr } = await client
         .from("gateway_sessions")
         .update({
