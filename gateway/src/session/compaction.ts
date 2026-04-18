@@ -59,15 +59,45 @@ export const layer = Layer.effect(
     const sessions = yield* SessionService
     const provider = yield* ProviderService
 
+    /**
+     * Split history at a TURN boundary — a user message — with at least
+     * `minKeepTail` messages in the tail.
+     *
+     * A single planner turn consists of user + assistant-with-tool_use +
+     * tool_result [+ more tool-use/tool-result pairs] + final-assistant.
+     * Anthropic / OpenAI APIs reject requests where a tool_use appears
+     * without a matching tool_result in the visible message list (or
+     * vice versa). A naive `history.length - keepTail` cut can land
+     * mid-turn and strand a tool_use in `head` whose tool_result is in
+     * `tail`, killing the session with a "tool_use/tool_result mismatch"
+     * 400 on the very next model call.
+     *
+     * Invariant: every cut point here is immediately before a user
+     * message. Since a user message starts a new turn by definition,
+     * every assistant tool_use is guaranteed to be in the same half as
+     * its tool_result.
+     *
+     * `keepTail` becomes a MINIMUM — we may keep more in tail to reach
+     * a safe boundary, never fewer.
+     */
     function splitHead(
       history: MessageWithParts[],
-      keepTail: number,
+      minKeepTail: number,
     ): { head: MessageWithParts[]; tail: MessageWithParts[] } {
-      if (history.length <= keepTail) return { head: [], tail: history }
-      return {
-        head: history.slice(0, history.length - keepTail),
-        tail: history.slice(history.length - keepTail),
+      if (history.length <= minKeepTail) return { head: [], tail: history }
+
+      // Start from the naive cut, then walk LEFT until the message at
+      // `cut` is a user turn. That guarantees the split lands between
+      // turns, not inside one.
+      let cut = history.length - minKeepTail
+      while (cut > 0 && history[cut].info.role !== "user") {
+        cut -= 1
       }
+      // If we walked all the way to index 0, the whole history is one
+      // unbroken turn — can't compact it without breaking tool pairing.
+      if (cut === 0) return { head: [], tail: history }
+
+      return { head: history.slice(0, cut), tail: history.slice(cut) }
     }
 
     /** True if the message is the synthetic "prior summary" injected by
