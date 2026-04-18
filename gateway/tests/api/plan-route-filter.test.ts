@@ -12,8 +12,13 @@ import { PromptEvent } from "../../src/session/prompt"
  *   - request A's SSE stream received request B's text.delta / task events
  *
  * The fix (src/api/plan-route.ts):
- *   - Resolve the session BEFORE opening SSE so we know our sessionID.
- *   - Pipe every bus.subscribe() through Stream.filter on sessionID.
+ *   1. Resolve the session BEFORE opening SSE so we know our sessionID
+ *   2. Pipe every bus.subscribe() through Stream.filter on sessionID
+ *   3. Tie reader fibers to the request's AbortSignal via
+ *      Stream.interruptWhen so they terminate instead of running forever
+ *
+ * This test mirrors both halves: filtered subscribers must isolate traffic,
+ * and interruptWhen must actually stop the reader.
  */
 
 const runtime = ManagedRuntime.make(busLayer)
@@ -89,4 +94,53 @@ describe("plan-route SSE isolation", () => {
       expect(e.properties.sessionID).toBe(sessB)
     }
   })
+
+  it("interruptWhen terminates the reader fiber when the AbortSignal fires", async () => {
+    const program = Effect.gen(function* () {
+      const bus = yield* BusService
+
+      const ac = new AbortController()
+      const abortEffect = Effect.callback<void>((resume) => {
+        if (ac.signal.aborted) {
+          resume(Effect.void)
+          return
+        }
+        const handler = () => resume(Effect.void)
+        ac.signal.addEventListener("abort", handler, { once: true })
+        return Effect.sync(() => ac.signal.removeEventListener("abort", handler))
+      })
+
+      let seen = 0
+      const fiber = yield* Effect.forkChild(
+        Stream.runForEach(
+          bus.subscribe(PromptEvent.TextDelta).pipe(Stream.interruptWhen(abortEffect)),
+          () =>
+            Effect.sync(() => {
+              seen += 1
+            }),
+        ),
+      )
+
+      yield* Effect.sleep("10 millis")
+
+      yield* bus.publish(PromptEvent.TextDelta, {
+        sessionID: "x",
+        messageID: "m",
+        partID: "p",
+        delta: "1",
+      })
+      yield* Effect.sleep("10 millis")
+
+      // Abort → reader should terminate on the next microtask.
+      ac.abort()
+
+      // Await the fiber — it MUST resolve. If interruptWhen is broken, this
+      // hangs and the test times out.
+      yield* Fiber.await(fiber)
+      return seen
+    })
+
+    const seen = await runtime.runPromise(program)
+    expect(seen).toBeGreaterThanOrEqual(1)
+  }, 3000)
 })

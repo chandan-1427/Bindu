@@ -22,7 +22,8 @@ import type { z } from "zod"
  *      Without the filter, concurrent /plan requests share the global bus
  *      and leak frames into each other's SSE streams.
  *   3. Open SSE, emit `session`, install sessionID-filtered subscribers,
- *      run the plan.
+ *      run the plan, then tear subscribers down via AbortSignal-driven
+ *      `Stream.interruptWhen` so no PubSub fibers leak past the request.
  *
  * Contract (see gateway/plans/PLAN.md §API):
  *   request:  { question, agents[], preferences?, session_id? }
@@ -98,7 +99,8 @@ async function handleRequest(
     })
 
     // Install subscribers BEFORE runPlan publishes, so we don't miss the
-    // first event.
+    // first event. Each reader is tied to `ac.signal` and terminates when
+    // the request ends.
     spawnReader(ac.signal, ownEvent(bus.subscribe(PromptEvent.Started)), async (evt) => {
       await stream.writeSSE({
         event: "plan",
@@ -165,18 +167,34 @@ async function handleRequest(
     // 5. Run the plan (events fire into the subscribers above)
     try {
       await Effect.runPromise(planner.runPlan(sessionCtx, request, { abort: ac.signal }))
-
-      // Give the bus event subscribers a tick to flush before closing.
-      await new Promise((r) => setTimeout(r, 100))
     } catch (e) {
       await stream.writeSSE({
         event: "error",
         data: JSON.stringify({ message: (e as Error).message }),
       })
     } finally {
+      // Aborting terminates every spawnReader fiber via Stream.interruptWhen,
+      // so no PubSub subscriptions leak past this request.
       ac.abort()
       await stream.writeSSE({ event: "done", data: "{}" })
     }
+  })
+}
+
+/**
+ * Bridge an AbortSignal into an Effect that resolves when the signal fires.
+ * Used as the trigger for `Stream.interruptWhen` so reader fibers terminate
+ * (rather than just go silent) when the /plan request ends.
+ */
+function abortEffect(signal: AbortSignal): Effect.Effect<void> {
+  return Effect.callback<void>((resume) => {
+    if (signal.aborted) {
+      resume(Effect.void)
+      return
+    }
+    const handler = () => resume(Effect.void)
+    signal.addEventListener("abort", handler, { once: true })
+    return Effect.sync(() => signal.removeEventListener("abort", handler))
   })
 }
 
@@ -186,15 +204,17 @@ function spawnReader<T>(
   cb: (evt: T) => Promise<void>,
 ): void {
   void Effect.runPromise(
-    Stream.runForEach(source, (evt) =>
-      Effect.promise(async () => {
-        if (signal.aborted) return
-        try {
-          await cb(evt)
-        } catch {
-          /* swallow — one write failure shouldn't kill the plan */
-        }
-      }),
+    Stream.runForEach(
+      source.pipe(Stream.interruptWhen(abortEffect(signal))),
+      (evt) =>
+        Effect.promise(async () => {
+          if (signal.aborted) return
+          try {
+            await cb(evt)
+          } catch {
+            /* swallow — one write failure shouldn't kill the plan */
+          }
+        }),
     ),
   ).catch(() => {
     /* stream shut down */
