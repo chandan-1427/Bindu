@@ -19,6 +19,16 @@ from bindu.common.protocol.types import (
 ContextT = TypeVar("ContextT", default=dict[str, Any])
 
 
+class OwnershipError(Exception):
+    """Raised when a caller attempts to use a resource owned by someone else.
+
+    Storage raises this to refuse a write (``submit_task`` against an existing
+    context with a different owner). Handlers catch it and convert to a
+    ``ContextNotFoundError`` / ``TaskNotFoundError`` JSON-RPC response so the
+    error does not leak the existence of the resource to the caller.
+    """
+
+
 class Storage(ABC, Generic[ContextT]):
     """Abstract storage interface for A2A protocol task and context management.
 
@@ -70,11 +80,17 @@ class Storage(ABC, Generic[ContextT]):
             caller_did: Identity of the authenticated caller, recorded as the
                 task's owner (and, if this call also creates the context, the
                 context's owner). ``None`` is allowed for deployments with auth
-                disabled; such rows are only visible to other unauthenticated
-                callers once ownership enforcement lands in Phase 2.
+                disabled.
 
         Returns:
             Newly created task in 'submitted' state
+
+        Raises:
+            OwnershipError: If ``context_id`` refers to an existing context
+                whose ``owner_did`` does not match ``caller_did``. Callers
+                must translate this to a ``ContextNotFoundError`` JSON-RPC
+                response to avoid leaking the context's existence.
+            ValueError: If the existing task is in a terminal state (immutable).
         """
 
     @abstractmethod
@@ -101,13 +117,25 @@ class Storage(ABC, Generic[ContextT]):
 
     @abstractmethod
     async def list_tasks(
-        self, length: int | None = None, offset: int = 0
+        self,
+        length: int | None = None,
+        offset: int = 0,
+        owner_did: str | None = None,
     ) -> list[Task]:
-        """List all tasks in storage.
+        """List tasks in storage, optionally filtered by owner.
 
         Args:
             length: Optional limit on number of tasks to return (most recent)
             offset: Optional offset for pagination
+            owner_did: When provided, only tasks with exactly this ``owner_did``
+                are returned (WHERE owner_did = :owner_did). When ``None`` (the
+                default), no owner filter is applied — rows are returned
+                regardless of ownership. Public handlers must pass the
+                authenticated caller's DID; internal callers (workers, metrics)
+                leave this unset to retain today's unfiltered behavior. Note
+                that ``owner_did=None`` does NOT mean "filter to NULL-owner
+                rows"; it means "no filter at all," matching the convention
+                used by :meth:`count_tasks`.
 
         Returns:
             List of tasks
@@ -130,7 +158,11 @@ class Storage(ABC, Generic[ContextT]):
 
     @abstractmethod
     async def list_tasks_by_context(
-        self, context_id: UUID, length: int | None = None, offset: int = 0
+        self,
+        context_id: UUID,
+        length: int | None = None,
+        offset: int = 0,
+        owner_did: str | None = None,
     ) -> list[Task]:
         """List tasks belonging to a specific context.
 
@@ -138,6 +170,9 @@ class Storage(ABC, Generic[ContextT]):
             context_id: Context to filter tasks by
             length: Optional limit on number of tasks to return (most recent)
             offset: Optional offset for pagination
+            owner_did: When provided, additionally filter to tasks owned by
+                this DID. ``None`` means no owner filter. See
+                :meth:`list_tasks` for the full semantics.
 
         Returns:
             List of tasks in the context
@@ -182,13 +217,19 @@ class Storage(ABC, Generic[ContextT]):
 
     @abstractmethod
     async def list_contexts(
-        self, length: int | None = None, offset: int = 0
+        self,
+        length: int | None = None,
+        offset: int = 0,
+        owner_did: str | None = None,
     ) -> list[ContextT]:
-        """List all contexts in storage.
+        """List contexts in storage, optionally filtered by owner.
 
         Args:
             length: Optional limit on number of contexts to return (most recent)
             offset: Optional offset for pagination
+            owner_did: When provided, only contexts with exactly this
+                ``owner_did`` are returned. ``None`` means no owner filter.
+                See :meth:`list_tasks` for the full semantics.
 
         Returns:
             List of strictly typed ContextT objects

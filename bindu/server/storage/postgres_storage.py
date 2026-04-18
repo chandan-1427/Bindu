@@ -44,7 +44,7 @@ from bindu.common.protocol.types import (
 from bindu.settings import app_settings
 from bindu.utils.logging import get_logger
 
-from .base import Storage
+from .base import OwnershipError, Storage
 from .helpers import (
     mask_database_url,
     normalize_message_uuids,
@@ -424,6 +424,21 @@ class PostgresStorage(Storage[dict[str, Any]]):
                     stmt = stmt.on_conflict_do_nothing(index_elements=["id"])
                     await session.execute(stmt)
 
+                    # Confirm context ownership matches caller. With
+                    # on_conflict_do_nothing, an existing context's owner is
+                    # preserved; here we refuse the write if that owner is
+                    # somebody else. Query is cheap (PK lookup on contexts.id).
+                    owner_row = await session.execute(
+                        select(contexts_table.c.owner_did).where(
+                            contexts_table.c.id == context_id
+                        )
+                    )
+                    existing_owner = owner_row.scalar()
+                    if existing_owner != caller_did:
+                        raise OwnershipError(
+                            f"Context {context_id} is owned by a different caller."
+                        )
+
                     now = get_current_utc_timestamp()
                     stmt = (
                         insert(tasks_table)
@@ -532,22 +547,20 @@ class PostgresStorage(Storage[dict[str, Any]]):
         return await self._retry_on_connection_error(_update)
 
     async def list_tasks(
-        self, length: int | None = None, offset: int = 0
+        self,
+        length: int | None = None,
+        offset: int = 0,
+        owner_did: str | None = None,
     ) -> list[Task]:
-        """List all tasks using SQLAlchemy.
-
-        Args:
-            length: Optional limit on number of tasks to return
-            offset: Optional offset for pagination
-
-        Returns:
-            List of tasks
-        """
+        """List tasks using SQLAlchemy, optionally filtered by owner."""
         self._ensure_connected()
 
         async def _list():
             async with self._get_session_with_schema() as session:
                 stmt = select(tasks_table).order_by(tasks_table.c.created_at.desc())
+
+                if owner_did is not None:
+                    stmt = stmt.where(tasks_table.c.owner_did == owner_did)
 
                 if length is not None:
                     stmt = stmt.limit(length)
@@ -585,17 +598,13 @@ class PostgresStorage(Storage[dict[str, Any]]):
         return await self._retry_on_connection_error(_count)
 
     async def list_tasks_by_context(
-        self, context_id: UUID, length: int | None = None, offset: int = 0
+        self,
+        context_id: UUID,
+        length: int | None = None,
+        offset: int = 0,
+        owner_did: str | None = None,
     ) -> list[Task]:
         """List tasks belonging to a specific context.
-
-        Args:
-            context_id: Context to filter tasks by
-            length: Optional limit on number of tasks to return
-            offset: Optional offset for pagination
-
-        Returns:
-            List of tasks in the context
 
         Raises:
             TypeError: If context_id is not UUID
@@ -611,6 +620,9 @@ class PostgresStorage(Storage[dict[str, Any]]):
                     .where(tasks_table.c.context_id == context_id)
                     .order_by(tasks_table.c.created_at.asc())
                 )
+
+                if owner_did is not None:
+                    stmt = stmt.where(tasks_table.c.owner_did == owner_did)
 
                 if length is not None:
                     stmt = stmt.limit(length)
@@ -735,17 +747,12 @@ class PostgresStorage(Storage[dict[str, Any]]):
         await self._retry_on_connection_error(_append)
 
     async def list_contexts(
-        self, length: int | None = None, offset: int = 0
+        self,
+        length: int | None = None,
+        offset: int = 0,
+        owner_did: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List all contexts using SQLAlchemy.
-
-        Args:
-            length: Optional maximum number of contexts to return
-            offset: Optional offset for pagination
-
-        Returns:
-            List of context dicts
-        """
+        """List contexts using SQLAlchemy, optionally filtered by owner."""
         self._ensure_connected()
 
         async def _list():
@@ -768,6 +775,9 @@ class PostgresStorage(Storage[dict[str, Any]]):
                     .group_by(contexts_table.c.id)
                     .order_by(contexts_table.c.created_at.desc())
                 )
+
+                if owner_did is not None:
+                    stmt = stmt.where(contexts_table.c.owner_did == owner_did)
 
                 if length is not None:
                     stmt = stmt.limit(length)
