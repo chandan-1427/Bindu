@@ -1,12 +1,24 @@
 # bugs/
 
-Postmortem archive. One file per bug worth learning from, across the whole
-repo — Python core, gateway, SDKs, frontend.
+Two artifacts, one folder:
 
-This is **not** a replacement for GitHub Issues. Every bug still gets an
-issue for triage. This folder is a durable, versioned record of what broke
-and what it taught us — the kind of artifact a new maintainer can read
-six months in to understand the codebase's failure modes.
+- [**`known-issues.md`**](./known-issues.md) — user-facing list of
+  CURRENT limitations and known gotchas. Grows and shrinks over time.
+  Entries are REMOVED as the underlying issues get fixed.
+
+- [**`YYYY-MM-DD-*.md`**](./) — dated postmortems for FIXED bugs worth
+  learning from, across the whole repo: Python core, gateway, SDKs,
+  frontend. One file per bug, retained indefinitely.
+
+Together they answer two different questions:
+
+- *"What should I know before using this system today?"* → `known-issues.md`
+- *"What has broken before, and what did it teach us?"* → dated postmortems
+
+Neither is a replacement for GitHub Issues. Every bug still gets an
+issue for triage and status; this folder is a durable, versioned record
+— the kind of artifact a new maintainer can read six months in to
+understand the codebase's failure modes.
 
 ## When to write a postmortem
 
@@ -97,11 +109,12 @@ single entry couldn't.
   closed. The issue tracker is the source of truth for **status**;
   this folder is the source of truth for **lessons**.
 
-- **[`docs/known-issues.md`](../docs/known-issues.md)** — user-facing
-  list of current limitations and known gotchas. Entries are REMOVED
-  as issues are fixed. A limitation that graduates to a
-  fully-investigated postmortem moves out of `known-issues.md` and
-  (if it taught us something) into `bugs/`.
+- **[`known-issues.md`](./known-issues.md)** — lives alongside the
+  postmortems in this folder. User-facing list of CURRENT limitations
+  and known gotchas. Entries are REMOVED as issues are fixed; a
+  limitation that graduates into a fully-investigated postmortem moves
+  out of `known-issues.md` and (if it taught us something) into a
+  dated `YYYY-MM-DD-*.md` file in this folder.
 
 - **Commit messages** — carry the tactical detail of the fix. The
   postmortem summarizes and generalizes; the commit message is the

@@ -10,8 +10,9 @@ want to help, open a GitHub Issue referencing the slug (e.g.
 **This file is user-facing.** It is the first thing a new contributor or
 operator reads to calibrate expectations. Entries are REMOVED from here
 as issues are fixed — if you're fixing one, delete its section in the
-same PR. If the fix teaches a generalizable lesson, also add a postmortem
-under [`bugs/`](../bugs/).
+same PR. If the fix teaches a generalizable lesson, also add a
+dated postmortem alongside this file in [`bugs/`](./) (see
+[`bugs/README.md`](./README.md) for the template).
 
 For the schema behind entries: severity is the impact if someone hits
 the limitation (`high` means it blocks common workflows; `low` means
@@ -132,7 +133,7 @@ omits an agent from a subsequent turn's catalog (e.g. temporary
 unreachability, inventory churn), the gateway drops it from the
 session's recorded catalog even though the session's history
 references its prior tool calls. Also exposed to a concurrency race
-(see [`bugs/2026-04-18-compaction-concurrent-races.md`](../bugs/2026-04-18-compaction-concurrent-races.md)
+(see [`2026-04-18-compaction-concurrent-races.md`](./2026-04-18-compaction-concurrent-races.md)
 — same shape, different column).
 **Workaround:** Always send the full agent catalog on every turn,
 even if individual agents are temporarily unavailable.
@@ -298,7 +299,7 @@ up from the prompt rather than the schema.
 **Severity:** low (correct today, architectural ceiling)
 **Summary:** The fix for concurrent compaction races
 ([commit 0655ac1](../commit/0655ac1) /
-[`bugs/2026-04-18-compaction-concurrent-races.md`](../bugs/2026-04-18-compaction-concurrent-races.md))
+[`2026-04-18-compaction-concurrent-races.md`](./2026-04-18-compaction-concurrent-races.md))
 uses an in-process `Map<SessionID, Promise>`. A horizontally-scaled
 deployment of the gateway (multiple Node processes fronting one
 Supabase) could still race across processes. Single-process

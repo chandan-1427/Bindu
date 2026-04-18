@@ -108,7 +108,7 @@ Other places this shape could hide in the codebase:
   agent from the catalog on a subsequent turn — we silently drop it
   even though the session's history references its tool calls. Same
   shape: overwrite of a lossy-valid store. Tracked in
-  `docs/known-issues.md` under `agent-catalog-overwrite`.
+  [`known-issues.md`](./known-issues.md) under `agent-catalog-overwrite`.
 - Any future "session summary" features on top of compaction (e.g.
   per-turn summaries, cross-session rollups) must preserve-on-merge,
   not overwrite.

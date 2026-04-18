@@ -96,7 +96,7 @@ is per-process state. A horizontally-scaled deployment of the gateway
 processes. Single-process Phase 1 is correct today; Phase 2 should
 add either a Postgres version column with optimistic concurrency or
 a wrap-everything-in-a-stored-procedure approach. Tracked in
-`docs/known-issues.md` under `compaction-dedupe-single-process-only`.
+`known-issues.md` under `compaction-dedupe-single-process-only`.
 
 ## Why the tests didn't catch it
 
@@ -134,7 +134,7 @@ Specific candidates in the codebase:
   for the same session could race on which catalog version wins.
   If catalogs differ (different tenants, different external configs),
   the losing one's agents are silently dropped. Noted in
-  `docs/known-issues.md` under `agent-catalog-overwrite` and
+  `known-issues.md` under `agent-catalog-overwrite` and
   `agent-catalog-race`.
 - `db.touchSession` does an `UPDATE ... SET last_active_at = now()`.
   Idempotent, safe — this is the right shape.
