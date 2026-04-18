@@ -1,0 +1,197 @@
+import { Context, Effect, Layer } from "effect"
+import { randomUUID } from "crypto"
+import type { Message, Part, Task } from "../protocol/types"
+import { sendAndPoll, type SendAndPollOutcome } from "./poll"
+import { authHeaders, type PeerAuth } from "../auth/resolver"
+import { BinduError, ErrorCode } from "../protocol/jsonrpc"
+import { verifyArtifact } from "../identity/verify"
+import { createResolver, primaryPublicKeyBase58 } from "../identity/resolve"
+import { getPeerDID } from "../protocol/identity"
+import type { AgentCard } from "../protocol/agent-card"
+
+/**
+ * Public Bindu client — the thing the planner's tools invoke.
+ *
+ * `callPeer` turns a typed (peer, skill, input) triple into:
+ *   1. A `message/send` with proper UUIDs + camelCase params
+ *   2. A polling loop until terminal/needs-action
+ *   3. Optional signature verification on returned artifacts (when the
+ *      peer config enables `trust.verifyDID`)
+ *
+ * Returns the Task + metadata about verification. The planner (Day 9)
+ * unpacks artifacts and feeds them back into the loop.
+ */
+
+export interface PeerDescriptor {
+  /** Friendly name from the agent catalog (e.g. "research"). */
+  name: string
+  /** Peer root URL (e.g. "https://research.acme.com"). Comes from the
+   *  External caller's agent catalog, never from AgentCard.url (Phase 0
+   *  finding — that field is sometimes incomplete). */
+  url: string
+  auth?: PeerAuth
+  /** Cached AgentCard if we've fetched it for this session; enables
+   *  DID-based signature verification. */
+  card?: AgentCard
+  trust?: {
+    verifyDID?: boolean
+    pinnedDID?: string
+  }
+}
+
+export interface CallPeerInput {
+  peer: PeerDescriptor
+  /** Skill id on the peer (informational; tools surface this). */
+  skill?: string
+  /** Input payload — plain string (wrapped as TextPart) or structured Parts. */
+  input: string | Part[]
+  /** Context id (one per gateway session). */
+  contextId: string
+  /** Task lineage for dependent tool calls. */
+  referenceTaskIds?: string[]
+  signal?: AbortSignal
+  timeoutMs?: number
+  acceptedOutputModes?: string[]
+}
+
+export interface CallPeerOutcome {
+  task: Task
+  terminal: boolean
+  needsAction: boolean
+  polls: number
+  /** Signature verification result, or `null` if verification not enabled. */
+  signatures: {
+    ok: boolean
+    signed: number
+    verified: number
+    unsigned: number
+  } | null
+}
+
+export interface Interface {
+  readonly callPeer: (input: CallPeerInput) => Effect.Effect<CallPeerOutcome, BinduError>
+  readonly cancel: (input: { peer: PeerDescriptor; taskId: string }) => Effect.Effect<void, BinduError>
+}
+
+export class Service extends Context.Service<Service, Interface>()("@bindu/Client") {}
+
+export const layer = Layer.effect(
+  Service,
+  Effect.sync(() => {
+    const didResolver = createResolver()
+
+    const callPeer: Interface["callPeer"] = (input) =>
+      Effect.tryPromise({
+        try: () => runCall(input, didResolver),
+        catch: (e) =>
+          e instanceof BinduError
+            ? e
+            : BinduError.transport(
+                e instanceof Error ? e.message : String(e),
+                input.peer.url,
+                e,
+              ),
+      })
+
+    const cancel: Interface["cancel"] = ({ peer, taskId }) =>
+      Effect.tryPromise({
+        try: () => runCancel(peer, taskId),
+        catch: (e) =>
+          e instanceof BinduError
+            ? e
+            : BinduError.transport(
+                e instanceof Error ? e.message : String(e),
+                peer.url,
+                e,
+              ),
+      })
+
+    return Service.of({ callPeer, cancel })
+  }),
+)
+
+async function runCall(
+  input: CallPeerInput,
+  didResolver: ReturnType<typeof createResolver>,
+): Promise<CallPeerOutcome> {
+  const headers = authHeaders(input.peer.auth)
+
+  const parts: Part[] =
+    typeof input.input === "string" ? [{ kind: "text", text: input.input }] : input.input
+
+  const message: Message = {
+    messageId: randomUUID(),
+    contextId: input.contextId,
+    taskId: randomUUID(),
+    kind: "message",
+    role: "user",
+    parts,
+    ...(input.referenceTaskIds && input.referenceTaskIds.length > 0
+      ? { referenceTaskIds: input.referenceTaskIds }
+      : {}),
+  }
+
+  const outcome: SendAndPollOutcome = await sendAndPoll({
+    peerUrl: input.peer.url,
+    headers,
+    message,
+    signal: input.signal,
+    timeoutMs: input.timeoutMs,
+    acceptedOutputModes: input.acceptedOutputModes,
+  })
+
+  const signatures = await maybeVerifySignatures(input.peer, outcome.task, didResolver)
+
+  return {
+    task: outcome.task,
+    terminal: outcome.terminal,
+    needsAction: outcome.needsAction,
+    polls: outcome.polls,
+    signatures,
+  }
+}
+
+async function maybeVerifySignatures(
+  peer: PeerDescriptor,
+  task: Task,
+  didResolver: ReturnType<typeof createResolver>,
+): Promise<CallPeerOutcome["signatures"]> {
+  if (!peer.trust?.verifyDID) return null
+  if (!task.artifacts || task.artifacts.length === 0) return null
+
+  const did = peer.trust.pinnedDID ?? (peer.card ? getPeerDID(peer.card) : null)
+  if (!did) return null
+
+  // Fetch (or hit cache) for the DID Document, extract the primary key.
+  const doc = await didResolver.resolve(peer.url, did).catch(() => null)
+  if (!doc) return null
+  const pubkey = primaryPublicKeyBase58(doc)
+  if (!pubkey) return null
+
+  let signed = 0
+  let verified = 0
+  let unsigned = 0
+  for (const art of task.artifacts) {
+    const outcome = await verifyArtifact({
+      parts: art.parts ?? [],
+      publicKeyBase58: pubkey,
+    })
+    signed += outcome.signed
+    verified += outcome.verified
+    unsigned += outcome.unsigned
+  }
+  return {
+    ok: signed === 0 ? true : signed === verified,
+    signed,
+    verified,
+    unsigned,
+  }
+}
+
+async function runCancel(peer: PeerDescriptor, taskId: string): Promise<void> {
+  const { cancel } = await import("./poll")
+  await cancel(
+    { peerUrl: peer.url, headers: authHeaders(peer.auth) },
+    taskId,
+  )
+}
