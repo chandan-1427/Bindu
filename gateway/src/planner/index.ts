@@ -301,6 +301,11 @@ function buildSkillTool(peer: PeerDescriptor, skill: SkillRequest, deps: BuildTo
 
         // 3. Finish the audit row
         const remoteContextId = outcome.task.contextId
+        // outcome.task.id is the peer-assigned task id. Record it so the
+        // `remote_task_id` column (and its index) are usable for debugging
+        // and cross-system correlation — the gateway's internal row id
+        // (taskRow.id) is never seen by the peer.
+        const remoteTaskId = outcome.task.id
         const finalState =
           outcome.task.status.state === "completed" ||
           outcome.task.status.state === "failed" ||
@@ -316,6 +321,7 @@ function buildSkillTool(peer: PeerDescriptor, skill: SkillRequest, deps: BuildTo
           state: finalState,
           outputText,
           remoteContextId,
+          remoteTaskId,
           usage: {
             polls: outcome.polls,
             terminal: outcome.terminal,

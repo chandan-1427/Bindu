@@ -38,6 +38,10 @@ export interface FinishTaskInput {
   outputText?: string
   usage?: Record<string, unknown>
   remoteContextId?: string
+  /** The peer-assigned task id, known only after the peer responds.
+   *  Recorded here so the `remote_task_id` column (and its index) become
+   *  usable for debugging, cancel, and reconciliation. */
+  remoteTaskId?: string
 }
 
 export interface Interface {
@@ -210,7 +214,7 @@ export const layer = Layer.effect(
         "recordTask",
       ) as Effect.Effect<TaskRow, Error>
 
-    const finishTask: Interface["finishTask"] = ({ id, state, outputText, usage, remoteContextId }) =>
+    const finishTask: Interface["finishTask"] = ({ id, state, outputText, usage, remoteContextId, remoteTaskId }) =>
       Effect.gen(function* () {
         const patch: Record<string, unknown> = {
           state,
@@ -219,6 +223,7 @@ export const layer = Layer.effect(
         if (outputText !== undefined) patch.output_text = outputText
         if (usage !== undefined) patch.usage = usage
         if (remoteContextId !== undefined) patch.remote_context_id = remoteContextId
+        if (remoteTaskId !== undefined) patch.remote_task_id = remoteTaskId
         const { error } = yield* Effect.promise(() =>
           client.from("gateway_tasks").update(patch).eq("id", id),
         )
