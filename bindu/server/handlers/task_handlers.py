@@ -55,15 +55,21 @@ class TaskHandlers:
     ) -> GetTaskResponse:
         """Get a task and return it to the client.
 
-        ``caller_did`` is accepted by the signature for Phase 1 uniformity but
-        not yet consulted. Phase 2 will filter access by comparing it against
-        the task's ``owner_did``.
+        Returns ``TaskNotFoundError`` for both "truly missing" and "exists but
+        owned by another caller" — the error shape intentionally cannot be
+        used to probe for task IDs across tenants.
         """
         task_id = request["params"]["task_id"]
         history_length = request["params"].get("history_length")
         task = await self.storage.load_task(task_id, history_length)
 
         if task is None:
+            return self.error_response_creator(
+                GetTaskResponse, request["id"], TaskNotFoundError, "Task not found"
+            )
+
+        owner = await self.storage.get_task_owner(task_id)
+        if owner != caller_did:
             return self.error_response_creator(
                 GetTaskResponse, request["id"], TaskNotFoundError, "Task not found"
             )
@@ -82,6 +88,14 @@ class TaskHandlers:
         task = await self.storage.load_task(task_id)
 
         if task is None:
+            return self.error_response_creator(
+                CancelTaskResponse, request["id"], TaskNotFoundError, "Task not found"
+            )
+
+        owner = await self.storage.get_task_owner(task_id)
+        if owner != caller_did:
+            # Same error as "not found" so a caller cannot discover which
+            # task IDs belong to other tenants by trying to cancel them.
             return self.error_response_creator(
                 CancelTaskResponse, request["id"], TaskNotFoundError, "Task not found"
             )
@@ -113,12 +127,15 @@ class TaskHandlers:
         request: ListTasksRequest,
         caller_did: str | None = None,
     ) -> ListTasksResponse:
-        """List all tasks in storage.
+        """List tasks owned by the caller.
 
-        ``caller_did`` is accepted but unused in Phase 1. Phase 2 will scope
-        the listing to rows owned by the caller.
+        When ``caller_did`` is non-None, the storage layer filters at the
+        index so only the caller's tasks are returned. When ``caller_did`` is
+        None (auth disabled), the current unfiltered behavior is preserved.
         """
-        tasks = await self.storage.list_tasks(request["params"].get("length"))
+        tasks = await self.storage.list_tasks(
+            request["params"].get("length"), owner_did=caller_did
+        )
 
         if tasks is None:
             return self.error_response_creator(
@@ -133,11 +150,20 @@ class TaskHandlers:
         request: TaskFeedbackRequest,
         caller_did: str | None = None,
     ) -> TaskFeedbackResponse:
-        """Submit feedback for a completed task."""
+        """Submit feedback for a completed task.
+
+        Only the task owner can submit feedback.
+        """
         task_id = request["params"]["task_id"]
         task = await self.storage.load_task(task_id)
 
         if task is None:
+            return self.error_response_creator(
+                TaskFeedbackResponse, request["id"], TaskNotFoundError, "Task not found"
+            )
+
+        owner = await self.storage.get_task_owner(task_id)
+        if owner != caller_did:
             return self.error_response_creator(
                 TaskFeedbackResponse, request["id"], TaskNotFoundError, "Task not found"
             )

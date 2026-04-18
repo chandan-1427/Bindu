@@ -157,6 +157,7 @@ class TaskManager:
             workers=self._workers,
             context_id_parser=self._parse_context_id,
             push_manager=self._push_manager,
+            error_response_creator=self._create_error_response,
         )
         self._task_handlers = TaskHandlers(
             scheduler=self.scheduler,
@@ -303,7 +304,7 @@ class TaskManager:
     ) -> SetTaskPushNotificationResponse:
         """Set push notification settings for a task."""
         return await self._push_manager.set_task_push_notification(
-            request, self.storage.load_task
+            request, self.storage.load_task, caller_did=caller_did
         )
 
     async def get_task_push_notification(
@@ -312,7 +313,9 @@ class TaskManager:
         caller_did: str | None = None,
     ) -> GetTaskPushNotificationResponse:
         """Get push notification settings for a task."""
-        return await self._push_manager.get_task_push_notification(request)
+        return await self._push_manager.get_task_push_notification(
+            request, caller_did=caller_did
+        )
 
     async def list_task_push_notifications(
         self,
@@ -320,7 +323,9 @@ class TaskManager:
         caller_did: str | None = None,
     ) -> ListTaskPushNotificationConfigResponse:
         """List push notification configurations for a task."""
-        return await self._push_manager.list_task_push_notifications(request)
+        return await self._push_manager.list_task_push_notifications(
+            request, caller_did=caller_did
+        )
 
     async def delete_task_push_notification(
         self,
@@ -328,4 +333,6 @@ class TaskManager:
         caller_did: str | None = None,
     ) -> DeleteTaskPushNotificationConfigResponse:
         """Delete a push notification configuration for a task."""
-        return await self._push_manager.delete_task_push_notification(request)
+        return await self._push_manager.delete_task_push_notification(
+            request, caller_did=caller_did
+        )
