@@ -6,9 +6,11 @@ import { Service as ConfigService } from "../config"
  * Hono application factory.
  *
  * Routes:
- *   GET  /health          — liveness + basic version info
- *   POST /plan            — wired in Day 9 (api/plan-route.ts)
- *   GET  /plan/:sid/...   — Phase 2 resume / replay
+ *   GET  /health                  — liveness + basic version info
+ *   GET  /.well-known/did.json    — self-published DID doc, when a gateway
+ *                                   identity is loaded (api/did-route.ts)
+ *   POST /plan                    — wired in Day 9 (api/plan-route.ts)
+ *   GET  /plan/:sid/...           — Phase 2 resume / replay
  *
  * This module only provides the app shell + `/health`. Route handlers live
  * in `src/api/` so they can own their own request validation + SSE wiring.

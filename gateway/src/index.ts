@@ -19,6 +19,7 @@ import * as BinduClient from "./bindu/client"
 import * as Server from "./server"
 import * as Planner from "./planner"
 import { buildPlanHandler } from "./api/plan-route"
+import { buildDidHandler } from "./api/did-route"
 import {
   loadLocalIdentity,
   type LocalIdentity,
@@ -247,6 +248,18 @@ export async function main(): Promise<{ close: () => Promise<void> }> {
   )
 
   app.post("/plan", planHandler)
+
+  // Self-publish the gateway's DID document so A2A peers can resolve
+  // ``did:bindu:<gateway>`` to its Ed25519 public key without needing
+  // Hydra admin access. Only registered when an identity is loaded —
+  // a gateway without a DID has nothing to publish here, and a 404
+  // correctly says so.
+  if (identity) {
+    app.get("/.well-known/did.json", buildDidHandler(identity))
+    console.log(
+      `[bindu-gateway] publishing DID document at /.well-known/did.json`,
+    )
+  }
 
   const { port, hostname } = cfg.gateway.server
   const httpServer = serve({ fetch: app.fetch, port, hostname })
