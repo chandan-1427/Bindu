@@ -116,6 +116,20 @@ matching your actual model when calling `compactIfNeeded`. For
 multi-model deployments this needs per-model configuration the
 gateway doesn't currently expose.
 
+**Status:** ✅ **Fixed.** `thresholdForModel()` in
+[`gateway/src/session/overflow.ts`](../gateway/src/session/overflow.ts)
+now resolves the context window from a lookup table keyed on
+`provider/modelId` (Anthropic 4.x = 200k, GPT-4o/4o-mini = 128k,
+GPT-4.1 = ~1M, o3 = 200k). Unknown models fall back to 128k
+(conservative — triggers compaction earlier rather than letting
+the caller hit `context_length_exceeded`). Operators can still
+pass an explicit override via `compactIfNeeded({threshold})` for
+exotic models. Threshold wiring goes through
+`compaction.ts:compactIfNeeded` which now takes the planner's
+actual model into account. Guarded by
+[`gateway/tests/session/overflow-threshold.test.ts`](../gateway/tests/session/overflow-threshold.test.ts)
+(14 tests).
+
 **Tracking:** _(no issue yet)_
 
 ### poll-budget-unbounded-wall-clock

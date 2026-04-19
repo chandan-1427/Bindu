@@ -3,7 +3,12 @@ import type { LanguageModel } from "ai"
 import { Service as DBService } from "../db"
 import { Service as ProviderService } from "../provider"
 import { Service as SessionService } from "./index"
-import { DEFAULT_THRESHOLD, estimateHistoryTokens, isOverflow, type OverflowThreshold } from "./overflow"
+import {
+  estimateHistoryTokens,
+  isOverflow,
+  thresholdForModel,
+  type OverflowThreshold,
+} from "./overflow"
 import { summarize } from "./summary"
 import type { SessionID } from "./schema"
 import type { MessageWithParts } from "./message"
@@ -252,7 +257,13 @@ export const layer = Layer.effect(
       Effect.gen(function* () {
         const history = yield* sessions.history(input.sessionID)
         const tokens = estimateHistoryTokens(history)
-        const threshold = input.threshold ?? DEFAULT_THRESHOLD
+        // Resolve threshold from the planner's ACTUAL model. The old
+        // default (``DEFAULT_THRESHOLD``, 200k for Claude Opus) masked
+        // compaction for smaller models: GPT-4o-mini's 128k window
+        // overflowed before compaction ran, and Gemini Flash's 1M
+        // window ran summarization way too early. Caller can still
+        // pass an explicit ``threshold`` for full override.
+        const threshold = input.threshold ?? thresholdForModel(input.model)
         if (!isOverflow(tokens, threshold)) {
           return { compacted: false, tokensBefore: tokens }
         }

@@ -22,10 +22,79 @@ export interface OverflowThreshold {
   triggerFraction: number
 }
 
+/**
+ * Context-window lookup for the models we commonly run the planner
+ * against, keyed by ``provider/modelId`` (i.e. the gateway's model
+ * identifier). When the planner's model isn't in this table we fall
+ * back to ``DEFAULT_THRESHOLD``, which is a conservative 128k — smaller
+ * than every modern default, so compaction kicks in early rather than
+ * letting the caller hit a provider-side ``context_length_exceeded``.
+ *
+ * The table is intentionally short. Adding a new entry is cheap (one
+ * line + its context window), and operators who run exotic models can
+ * override via ``gateway.config.json.agent.planner.contextWindow`` or
+ * pass a custom ``threshold`` to ``compactIfNeeded``.
+ *
+ * **Numbers come from each provider's published model card**, not
+ * guesses. Bindu's planner has historically assumed Claude Opus 200k
+ * even after switching to different models — see
+ * ``bugs/known-issues.md#context-window-hardcoded`` for the incident
+ * history this table fixes.
+ */
+const CONTEXT_WINDOW_BY_MODEL: Record<string, number> = {
+  // Anthropic — 200k across the 4.x line
+  "anthropic/claude-opus-4-7": 200_000,
+  "anthropic/claude-opus-4-6": 200_000,
+  "anthropic/claude-opus-4-5": 200_000,
+  "anthropic/claude-sonnet-4-6": 200_000,
+  "anthropic/claude-sonnet-4-5": 200_000,
+  "anthropic/claude-haiku-4-5": 200_000,
+
+  // OpenAI
+  "openai/gpt-4o": 128_000,
+  "openai/gpt-4o-mini": 128_000,
+  "openai/gpt-4.1": 1_047_576,
+  "openai/gpt-4.1-mini": 1_047_576,
+  "openai/o3": 200_000,
+  "openai/o3-mini": 200_000,
+}
+
 export const DEFAULT_THRESHOLD: OverflowThreshold = {
-  contextWindow: 200_000, // Claude Opus 4.x; conservative for other models
+  // 128k — smaller than every common default. Compaction fires
+  // earlier than strictly necessary for larger-window models, which
+  // costs a summarization call but never triggers a provider-side
+  // overflow rejection. See CONTEXT_WINDOW_BY_MODEL above for the
+  // happy path where the model is known.
+  contextWindow: 128_000,
   reserveForOutput: 16_000,
   triggerFraction: 0.8,
+}
+
+/**
+ * Resolve the right overflow threshold for a given planner model.
+ *
+ * Resolution order (first match wins):
+ *   1. Explicit ``override`` the caller passed (used by tests and by
+ *      operators with unusual models — pass
+ *      ``gateway.config.json.agent.planner.contextWindow``).
+ *   2. Lookup in ``CONTEXT_WINDOW_BY_MODEL`` by the full
+ *      ``provider/modelId`` key.
+ *   3. ``DEFAULT_THRESHOLD`` as the conservative fallback.
+ *
+ * The returned threshold keeps the other two fields
+ * (``reserveForOutput``, ``triggerFraction``) at their conservative
+ * defaults unless the override supplies replacements.
+ */
+export function thresholdForModel(
+  model: string,
+  override?: Partial<OverflowThreshold>,
+): OverflowThreshold {
+  const knownWindow = CONTEXT_WINDOW_BY_MODEL[model]
+  return {
+    contextWindow: override?.contextWindow ?? knownWindow ?? DEFAULT_THRESHOLD.contextWindow,
+    reserveForOutput: override?.reserveForOutput ?? DEFAULT_THRESHOLD.reserveForOutput,
+    triggerFraction: override?.triggerFraction ?? DEFAULT_THRESHOLD.triggerFraction,
+  }
 }
 
 /** Very rough token estimate — 1 token ≈ 4 chars for English/code. */
