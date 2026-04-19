@@ -18,7 +18,7 @@ import { Service as ConfigService } from "../config"
  *   name: planner
  *   description: Planning gateway for multi-agent collab
  *   mode: primary
- *   model: openrouter/openai/gpt-4o-mini
+ *   model: openrouter/anthropic/claude-sonnet-4.6
  *   temperature: 0.3
  *   steps: 10
  *   permission:

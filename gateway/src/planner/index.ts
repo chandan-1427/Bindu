@@ -194,7 +194,7 @@ export const layer = Layer.effect(
           return yield* Effect.fail(new Error('planner: no "planner" agent configured'))
         }
 
-        const model = plannerAgent.model ?? "openrouter/openai/gpt-4o-mini"
+        const model = plannerAgent.model ?? "openrouter/anthropic/claude-sonnet-4.6"
         yield* compaction
           .compactIfNeeded({
             sessionID: ctx.sessionID,
