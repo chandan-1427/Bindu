@@ -2,7 +2,7 @@
 name: planner
 description: Planning gateway for multi-agent Bindu collaboration
 mode: primary
-model: anthropic/claude-opus-4-7
+model: openrouter/openai/gpt-4o-mini
 temperature: 0.3
 steps: 10
 permission:

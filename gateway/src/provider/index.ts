@@ -1,38 +1,49 @@
 import { Context, Effect, Layer } from "effect"
-import { anthropic, createAnthropic } from "@ai-sdk/anthropic"
-import { openai, createOpenAI } from "@ai-sdk/openai"
+import { createOpenAI } from "@ai-sdk/openai"
 import type { LanguageModel } from "ai"
 import { Service as ConfigService, type Config } from "../config"
 import type { z } from "zod"
 
 /**
- * Provider service — Phase 1 minimal.
+ * Provider service — OpenRouter-only.
  *
- * Looks up an AI-SDK LanguageModel handle by "providerId/modelId" string,
- * using the `provider` block in gateway config for API keys and optional
- * baseURL overrides.
+ * Looks up an AI-SDK LanguageModel handle by ``"openrouter/<modelId>"``
+ * where ``modelId`` is whatever OpenRouter publishes for that model
+ * (for example ``openai/gpt-4o-mini`` or
+ * ``anthropic/claude-sonnet-4.5``).
  *
- * This is a deliberate simplification compared to OpenCode's full provider
- * abstraction (which handles plugins, transform chains, SDK discovery, usage
- * telemetry, per-provider auth flows). For the gateway's planner we only
- * need: given a model string, give me a model handle the AI SDK can stream.
+ * Why a single provider: we ship every agent (gateway planner + the
+ * fleet) on OpenRouter. Supporting the Anthropic or OpenAI SDKs
+ * directly was optionality nobody used and added two env vars and a
+ * dependency we could drop. OpenRouter exposes an OpenAI-compatible
+ * API, so a single ``@ai-sdk/openai`` client with a baseURL override
+ * covers every model on the platform.
+ *
+ * This is a deliberate simplification compared to OpenCode's full
+ * provider abstraction (plugins, transform chains, SDK discovery, per-
+ * provider auth flows). For the gateway's planner we only need: given
+ * a model string, give me a model handle the AI SDK can stream.
  */
 
-const SUPPORTED_PROVIDERS = ["anthropic", "openai"] as const
+const SUPPORTED_PROVIDERS = ["openrouter"] as const
 export type ProviderId = (typeof SUPPORTED_PROVIDERS)[number]
+
+const OPENROUTER_DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
 export function parseModelId(s: string): { providerId: ProviderId; modelId: string } {
   const slash = s.indexOf("/")
   if (slash === -1) {
     throw new Error(
-      `provider: model id must be "provider/model" (got "${s}"). Example: "anthropic/claude-opus-4-7".`,
+      `provider: model id must be "provider/model" (got "${s}"). ` +
+        `Example: "openrouter/openai/gpt-4o-mini".`,
     )
   }
   const providerId = s.slice(0, slash) as ProviderId
   const modelId = s.slice(slash + 1)
   if (!(SUPPORTED_PROVIDERS as readonly string[]).includes(providerId)) {
     throw new Error(
-      `provider: unsupported provider "${providerId}" (supported: ${SUPPORTED_PROVIDERS.join(", ")})`,
+      `provider: unsupported provider "${providerId}" ` +
+        `(supported: ${SUPPORTED_PROVIDERS.join(", ")})`,
     )
   }
   return { providerId, modelId }
@@ -52,28 +63,13 @@ export const layer = Layer.effect(
 
     function build(providerId: ProviderId, modelId: string): LanguageModel {
       const providerCfg = providers[providerId]
-      switch (providerId) {
-        case "anthropic": {
-          if (providerCfg?.apiKey || providerCfg?.baseURL) {
-            const p = createAnthropic({
-              apiKey: providerCfg.apiKey,
-              baseURL: providerCfg.baseURL,
-            })
-            return p(modelId)
-          }
-          return anthropic(modelId)
-        }
-        case "openai": {
-          if (providerCfg?.apiKey || providerCfg?.baseURL) {
-            const p = createOpenAI({
-              apiKey: providerCfg.apiKey,
-              baseURL: providerCfg.baseURL,
-            })
-            return p(modelId)
-          }
-          return openai(modelId)
-        }
-      }
+      // OpenRouter's API is OpenAI-compatible — one @ai-sdk/openai
+      // client pointed at OpenRouter's baseURL handles every model.
+      const p = createOpenAI({
+        apiKey: providerCfg?.apiKey,
+        baseURL: providerCfg?.baseURL ?? OPENROUTER_DEFAULT_BASE_URL,
+      })
+      return p(modelId)
     }
 
     return Service.of({

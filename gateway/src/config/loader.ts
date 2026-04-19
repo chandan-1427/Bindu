@@ -116,13 +116,16 @@ function envOverrides(base: Record<string, any>): Record<string, any> {
     }
   }
 
-  if (process.env.ANTHROPIC_API_KEY) {
+  // OpenRouter is the single supported LLM provider — see
+  // src/provider/index.ts for the rationale. The env hook wires
+  // OpenRouter's OpenAI-compatible API (baseURL filled in by the
+  // provider layer if not explicitly set in a config file).
+  if (process.env.OPENROUTER_API_KEY) {
     out.provider = out.provider ?? {}
-    out.provider.anthropic = { ...out.provider.anthropic, apiKey: process.env.ANTHROPIC_API_KEY }
-  }
-  if (process.env.OPENAI_API_KEY) {
-    out.provider = out.provider ?? {}
-    out.provider.openai = { ...out.provider.openai, apiKey: process.env.OPENAI_API_KEY }
+    out.provider.openrouter = {
+      ...out.provider.openrouter,
+      apiKey: process.env.OPENROUTER_API_KEY,
+    }
   }
 
   return out
