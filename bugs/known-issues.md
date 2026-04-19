@@ -709,6 +709,55 @@ deprecated in your configuration and add a startup assertion that
 refuses to boot when the flag is false and auth is enabled.
 **Tracking:** _(no issue yet)_
 
+### did-admission-control-missing
+
+**Severity:** medium (security, admission control)
+**Summary:**
+[`bindu/server/middleware/auth/hydra.py`](../bindu/server/middleware/auth/hydra.py)
+verifies that an inbound request was signed by the private key of the
+DID declared in the OAuth token's `client_id`. Crypto is correct:
+forging signatures for a known DID is not feasible. But there is no
+admission-control layer above that — the server trusts ANY
+Hydra-registered DID that presents a valid OAuth token and a valid
+signature. No allowlist, no trust-chain check, no pattern match
+against an expected DID namespace.
+
+Concretely: in a multi-tenant deployment (or one where Hydra's
+admin API is reachable by more than the operator), a third party
+can `hydra create oauth2-client` with `client_id=did:bindu:evil:*`
+and a public key they control, then call the agent. Their token
+validates (Hydra issued it), their signature validates (they hold
+the matching private key), and the request reaches the handler.
+
+What they gain:
+- Ability to submit tasks — the agent burns its compute / LLM
+  budget executing on their behalf.
+- The response stream — they get whatever the agent produces.
+
+What they cannot do (already mitigated):
+- Read other tenants' tasks — PR #460
+  (`idor-task-context-no-ownership-check`, see postmortem
+  [`2026-04-18-idor-task-ownership.md`](./2026-04-18-idor-task-ownership.md))
+  scopes reads and lists by `owner_did`. Rows they create are only
+  visible to them.
+
+Single-tenant deployments with locked-down Hydra admin access are
+not reachable by this; Hydra registration is the de facto trust
+boundary. Severity rises to high for SaaS / multi-tenant / shared
+Hydra shapes.
+
+**Workaround:** Tightly restrict Hydra admin API access to the
+operator; audit the list of registered OAuth clients before
+exposing the agent. For stronger posture, deploy behind a reverse
+proxy that filters incoming `Authorization` headers by a known
+allowlist of token introspection subjects, or add a small
+post-auth middleware that rejects the request when
+`client_did not in app_settings.auth.allowed_dids`. A native fix
+would add an `ALLOWED_DIDS` config (exact-match or pattern) to
+`app_settings.auth` and enforce it in the Hydra middleware after
+signature verification passes — ~30 lines in one file.
+**Tracking:** _(no issue yet)_
+
 ### cors-allow-credentials-with-user-origins
 
 **Severity:** medium (security, CORS misconfig)
