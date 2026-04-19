@@ -56,7 +56,7 @@ def _sign_headers(body):
 
 class TestVerifySignatureHappyPath:
     def test_valid_signature_accepted(self):
-        body = {"method": "message/send", "id": "1"}
+        body = b'{"method": "message/send", "id": "1"}'
         h = _sign_headers(body)
         assert verify_signature(
             body=body,
@@ -77,7 +77,7 @@ class TestVerifySignatureLegitimateRejects:
     code so operators can tell them apart in triage."""
 
     def test_timestamp_too_old_rejected(self):
-        body = {"x": 1}
+        body = b'{"x": 1}'
         h = _sign_headers(body)
         stale_ts = int(time.time()) - 3600  # 1 hour ago
         ok = verify_signature(
@@ -90,7 +90,7 @@ class TestVerifySignatureLegitimateRejects:
         assert ok is False
 
     def test_malformed_base58_signature_rejected(self):
-        body = {"x": 1}
+        body = b'{"x": 1}'
         h = _sign_headers(body)
         # "!!!" is not valid base58 — decode branch, not an unhandled raise.
         ok = verify_signature(
@@ -103,7 +103,7 @@ class TestVerifySignatureLegitimateRejects:
         assert ok is False
 
     def test_malformed_base58_public_key_rejected(self):
-        body = {"x": 1}
+        body = b'{"x": 1}'
         h = _sign_headers(body)
         ok = verify_signature(
             body=body,
@@ -118,7 +118,7 @@ class TestVerifySignatureLegitimateRejects:
         """base58-decodes cleanly but is the wrong length for Ed25519
         — VerifyKey constructor raises ValueError. Same decode branch
         should catch it, not let it escape."""
-        body = {"x": 1}
+        body = b'{"x": 1}'
         h = _sign_headers(body)
         too_short = base58.b58encode(b"\x00" * 10).decode()
         ok = verify_signature(
@@ -134,7 +134,7 @@ class TestVerifySignatureLegitimateRejects:
         """Signature is well-formed base58 of the right length, but
         doesn't match the message. BadSignatureError — distinct branch
         from the malformed-input one."""
-        body = {"x": 1}
+        body = b'{"x": 1}'
         fake_sig = base58.b58encode(b"\x00" * 64).decode()
         ok = verify_signature(
             body=body,
@@ -148,9 +148,9 @@ class TestVerifySignatureLegitimateRejects:
     def test_body_tamper_rejected(self):
         """Sign a body, then pass a different body to verify. Valid
         base58, right-length key, math fails."""
-        h = _sign_headers({"x": 1})
+        h = _sign_headers(b'{"x": 1}')
         ok = verify_signature(
-            body={"x": 2},  # tampered
+            body=b'{"x": 2}',  # tampered
             signature=h["X-DID-Signature"],
             did=DID,
             timestamp=int(h["X-DID-Timestamp"]),
@@ -180,7 +180,7 @@ class TestVerifySignatureUnexpectedExceptionsPropagate:
     """
 
     def test_runtime_error_in_verify_step_propagates(self):
-        body = {"x": 1}
+        body = b'{"x": 1}'
         h = _sign_headers(body)
 
         # Patch VerifyKey.verify to raise an unexpected error. If the
@@ -202,7 +202,7 @@ class TestVerifySignatureUnexpectedExceptionsPropagate:
         """If create_signature_payload ever regresses and raises an
         AttributeError, it must surface — not be silently mapped to
         'invalid signature.'"""
-        body = {"x": 1}
+        body = b'{"x": 1}'
         h = _sign_headers(body)
 
         with patch(
