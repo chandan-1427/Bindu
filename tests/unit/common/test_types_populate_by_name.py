@@ -27,7 +27,6 @@ from bindu.common.protocol.types import (
     A2A_MODEL_CONFIG,
     Artifact,
     Message,
-    SendMessageResponse,
     Task,
     a2a_request_ta,
 )
@@ -79,27 +78,15 @@ class TestInputAcceptsBothCases:
 
     def test_message_accepts_camel_case(self):
         parsed = TypeAdapter(Message).validate_python(_msg("camel"))
-        assert parsed["message_id"] == UUID(
-            "00000000-0000-0000-0000-000000000001"
-        )
-        assert parsed["context_id"] == UUID(
-            "00000000-0000-0000-0000-000000000002"
-        )
-        assert parsed["task_id"] == UUID(
-            "00000000-0000-0000-0000-000000000003"
-        )
+        assert parsed["message_id"] == UUID("00000000-0000-0000-0000-000000000001")
+        assert parsed["context_id"] == UUID("00000000-0000-0000-0000-000000000002")
+        assert parsed["task_id"] == UUID("00000000-0000-0000-0000-000000000003")
 
     def test_message_accepts_snake_case(self):
         parsed = TypeAdapter(Message).validate_python(_msg("snake"))
-        assert parsed["message_id"] == UUID(
-            "00000000-0000-0000-0000-000000000001"
-        )
-        assert parsed["context_id"] == UUID(
-            "00000000-0000-0000-0000-000000000002"
-        )
-        assert parsed["task_id"] == UUID(
-            "00000000-0000-0000-0000-000000000003"
-        )
+        assert parsed["message_id"] == UUID("00000000-0000-0000-0000-000000000001")
+        assert parsed["context_id"] == UUID("00000000-0000-0000-0000-000000000002")
+        assert parsed["task_id"] == UUID("00000000-0000-0000-0000-000000000003")
 
     def test_artifact_accepts_snake_case(self):
         """Spot-check a non-Message type — the guarantee must be
@@ -111,9 +98,7 @@ class TestInputAcceptsBothCases:
                 "parts": [{"kind": "text", "text": "hello"}],
             }
         )
-        assert parsed["artifact_id"] == UUID(
-            "00000000-0000-0000-0000-000000000004"
-        )
+        assert parsed["artifact_id"] == UUID("00000000-0000-0000-0000-000000000004")
 
     def test_full_a2a_request_accepts_snake_case(self):
         """End-to-end via the module-level TypeAdapter used by the

@@ -96,9 +96,7 @@ class TestTaskHandlers:
 
         await handler.list_tasks(request, caller_did="did:bindu:alice")
 
-        mock_storage.list_tasks.assert_called_once_with(
-            5, owner_did="did:bindu:alice"
-        )
+        mock_storage.list_tasks.assert_called_once_with(5, owner_did="did:bindu:alice")
 
     @pytest.mark.asyncio
     async def test_task_feedback_success(self):

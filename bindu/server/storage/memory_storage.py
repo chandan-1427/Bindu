@@ -433,8 +433,7 @@ class InMemoryStorage(Storage[dict[str, Any]]):
             tasks = [
                 self.tasks[task_id]
                 for task_id in task_ids
-                if task_id in self.tasks
-                and self._task_owners.get(task_id) == owner_did
+                if task_id in self.tasks and self._task_owners.get(task_id) == owner_did
             ]
 
         if offset > 0:
