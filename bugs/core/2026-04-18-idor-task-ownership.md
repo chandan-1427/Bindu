@@ -48,7 +48,7 @@ storage layer had no notion of task ownership, and the handlers
 never consulted the caller's identity when serving a request.
 
 Pre-fix state at
-[`bindu/server/handlers/task_handlers.py:51-62`](../bindu/server/handlers/task_handlers.py):
+[`bindu/server/handlers/task_handlers.py:51-62`](../../bindu/server/handlers/task_handlers.py):
 
 ```python
 async def get_task(self, request: GetTaskRequest) -> GetTaskResponse:
@@ -91,8 +91,8 @@ be incremental:
 **Phase 1 — plumbing** (commits `2101d6d`, `bb97d13`)
 
 - New nullable `owner_did` column + index on `tasks` and
-  `contexts` ([`bindu/server/storage/schema.py`](../bindu/server/storage/schema.py))
-- Alembic migration [`20260418_0001_add_owner_did.py`](../alembic/versions/20260418_0001_add_owner_did.py)
+  `contexts` ([`bindu/server/storage/schema.py`](../../bindu/server/storage/schema.py))
+- Alembic migration [`20260418_0001_add_owner_did.py`](../../alembic/versions/20260418_0001_add_owner_did.py)
 - `Storage` ABC gained `get_task_owner` / `get_context_owner`
   and `submit_task(caller_did=...)`
 - A2A endpoint resolves `caller_did` from
@@ -115,24 +115,24 @@ be incremental:
 
 **Phase 3 — operator tooling** (commit `7db5945`)
 
-- [`scripts/backfill_owner_did.py`](../scripts/backfill_owner_did.py) assigns pre-existing NULL-owner
+- [`scripts/backfill_owner_did.py`](../../scripts/backfill_owner_did.py) assigns pre-existing NULL-owner
   rows to a designated DID before enforcement is deployed.
-- [`alembic/README.md`](../alembic/README.md) documents the
+- [`alembic/README.md`](../../alembic/README.md) documents the
   upgrade ordering: migrate → backfill → deploy enforcement.
 
 **Phase 4 — regression coverage + cleanup**
 
-- Integration test [`tests/integration/test_task_ownership.py`](../tests/integration/test_task_ownership.py)
+- Integration test [`tests/integration/test_task_ownership.py`](../../tests/integration/test_task_ownership.py)
   drives the real `TaskManager` with two synthetic DIDs and
   asserts cross-tenant denial on every public handler (10 cases).
 - This postmortem.
 - The `idor-task-context-no-ownership-check` entry removed from
-  [`bugs/known-issues.md`](./known-issues.md).
+  [`bugs/known-issues.md`](../known-issues.md).
 
 ## Why the tests didn't catch it
 
 Every existing handler test in
-[`tests/unit/server/handlers/`](../tests/unit/server/handlers/)
+[`tests/unit/server/handlers/`](../../tests/unit/server/handlers/)
 exercised a single synthetic caller with mocked storage. There
 was no "two tenants" scenario — no test where task A was created
 by one identity and then fetched by another. The handler returned
@@ -140,7 +140,7 @@ the row because the mock returned the row, and the test passed
 because the assertion only checked the response shape.
 
 The integration tests for gRPC
-([`tests/integration/grpc/test_grpc_e2e.py`](../tests/integration/grpc/test_grpc_e2e.py))
+([`tests/integration/grpc/test_grpc_e2e.py`](../../tests/integration/grpc/test_grpc_e2e.py))
 likewise ran one caller end-to-end. Auth was either disabled or
 mocked out, so `scope.state.user` was whatever the test supplied.
 
@@ -157,25 +157,25 @@ handler that accepts an ID from the request and returns data
 keyed by it. Audit anywhere the pattern `load_by_id(user_input)`
 appears without an adjacent ownership check. In this codebase:
 
-- [`bindu/server/endpoints/negotiation.py:220`](../bindu/server/endpoints/negotiation.py) —
+- [`bindu/server/endpoints/negotiation.py:220`](../../bindu/server/endpoints/negotiation.py) —
   `app.task_manager.storage.list_tasks()` is called with no
   owner filter. The negotiation endpoint is on a different auth
   path and wasn't in scope for this fix, but the same row-level
   authz question applies: can peer A negotiate over peer B's
   task inventory? Worth a follow-up audit.
-- [`bindu/server/endpoints/metrics.py:43-49`](../bindu/server/endpoints/metrics.py) —
+- [`bindu/server/endpoints/metrics.py:43-49`](../../bindu/server/endpoints/metrics.py) —
   `count_tasks(status=...)` returns a global count across all
   tenants. For aggregate operational metrics this is acceptable,
   but if metrics are ever exposed per-caller (e.g. a "your usage"
   endpoint) the same shape would leak tenant sizes. Flag this
   before any such change.
-- [`bindu/extensions/`](../bindu/extensions/) — any future
+- [`bindu/extensions/`](../../bindu/extensions/) — any future
   extension that attaches to a task ID (x402 payment sessions,
   skills registration, etc.) should verify the caller owns the
   task before allowing the attachment. The push-notification
   enforcement in this fix is the reference pattern.
 - The per-DID schema feature from
-  [`20260119_0001_add_schema_support.py`](../alembic/versions/20260119_0001_add_schema_support.py)
+  [`20260119_0001_add_schema_support.py`](../../alembic/versions/20260119_0001_add_schema_support.py)
   isolates agents (each agent's own DID gets its own schema) but
   still shares a schema across all the *callers* of that agent.
   The `owner_did` column added by this fix is required inside
@@ -193,6 +193,6 @@ appears without an adjacent ownership check. In this codebase:
 - The authz scope-enforcement flag
   (`auth.require_permissions`) remains optional — see slug
   `authz-scope-check-behind-optional-flag` in
-  [`bugs/known-issues.md`](./known-issues.md). Row-level
+  [`bugs/known-issues.md`](../known-issues.md). Row-level
   ownership and scope-based authz are complementary; both
   belong on by default in production.

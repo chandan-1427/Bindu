@@ -14,7 +14,7 @@ issue:
 ## Symptom
 
 The Hydra middleware in
-[`bindu/server/middleware/auth/hydra.py`](../bindu/server/middleware/auth/hydra.py)
+[`bindu/server/middleware/auth/hydra.py`](../../bindu/server/middleware/auth/hydra.py)
 ships a second-layer authentication check: for any OAuth caller whose
 `client_id` starts with `did:`, every request body must be signed
 with the caller's Ed25519 private key, and the middleware verifies
@@ -44,7 +44,7 @@ for anyone who could either not sign or not register a key.
 
 ## Root cause
 
-[`_verify_did_signature_asgi`](../bindu/server/middleware/auth/hydra.py) at
+[`_verify_did_signature_asgi`](../../bindu/server/middleware/auth/hydra.py) at
 `hydra.py:158-223` is only entered when the outer `__call__` gate
 confirms the caller is a DID client (`client_did.startswith("did:")`
 at `hydra.py:269`). At that point the contract is unambiguous:
@@ -105,7 +105,7 @@ their Hydra metadata:
   `"public_key_unavailable"`, `is_valid=False`, same 403.
 
 Seven tests land alongside the fix in
-[`tests/unit/server/middleware/test_hydra_did_signature.py`](../tests/unit/server/middleware/test_hydra_did_signature.py):
+[`tests/unit/server/middleware/test_hydra_did_signature.py`](../../tests/unit/server/middleware/test_hydra_did_signature.py):
 
 - The two previously-fail-open paths (missing headers / missing
   public key) now return `is_valid=False`. Also covered: an
@@ -154,20 +154,20 @@ a reject," that's a variant of this bug.
 
 In this codebase the places most likely to hold the same shape:
 
-- [`bindu/server/middleware/x402/x402_middleware.py`](../bindu/server/middleware/x402/x402_middleware.py)
+- [`bindu/server/middleware/x402/x402_middleware.py`](../../bindu/server/middleware/x402/x402_middleware.py)
   lines 213–215 still fail open on body-parse errors — tracked in
   `bugs/known-issues.md` as `x402-middleware-fails-open-on-body-parse`.
   Same pattern: the "can't parse" branch calls `await call_next(request)`
   instead of rejecting. Fixing this is independent from the DID fix
   but uses the same logic.
-- [`bindu/utils/did/signature.py`](../bindu/utils/did/signature.py)
+- [`bindu/utils/did/signature.py`](../../bindu/utils/did/signature.py)
   lines 114–126 (the underlying `verify_signature` helper) catch
   `Exception` broadly and return `False`. That is actually
   correctly fail-closed on the result, but the broad exception
   obscures which failure mode occurred — tracked as
   `did-signature-overbroad-exception-catch`.
 - The Hydra introspection path at
-  [`hydra.py:102-104`](../bindu/server/middleware/auth/hydra.py)
+  [`hydra.py:102-104`](../../bindu/server/middleware/auth/hydra.py)
   catches introspection errors and re-raises — correctly
   fail-closed. Worth a re-read when auditing.
 - New middleware or signature-verification code added in the
@@ -182,7 +182,7 @@ In this codebase the places most likely to hold the same shape:
   and `BadSignatureError` for cryptographic failures, so logs
   distinguish "malformed input" from "wrong signature." Tracked
   as `did-signature-overbroad-exception-catch` in
-  [`bugs/known-issues.md`](./known-issues.md).
+  [`bugs/known-issues.md`](../known-issues.md).
 - The Hydra token introspection cache still holds revoked tokens
   for up to 5 minutes (`hydra-token-cache-revocation-lag` in
   known-issues). Independent from this fix; still worth addressing.

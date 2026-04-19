@@ -587,6 +587,50 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 <br/>
 
+## ⚠️ Known Issues
+
+Before running Bindu in production you should read
+[`bugs/known-issues.md`](./bugs/known-issues.md) — a per-subsystem
+catalog of current limitations and sharp edges, with workarounds
+for each. Postmortems for already-fixed bugs live alongside it
+under [`bugs/core/`](./bugs/core/), [`bugs/gateway/`](./bugs/gateway/),
+[`bugs/sdk/`](./bugs/sdk/), and [`bugs/frontend/`](./bugs/frontend/).
+
+### Current high-severity issues
+
+These are the ones most likely to bite you. Each links to a
+story-format entry in `known-issues.md` explaining the scenario,
+the root cause, and the workaround.
+
+| Subsystem | Slug | What it looks like from outside |
+|---|---|---|
+| Core | [`x402-middleware-fails-open-on-body-parse`](./bugs/known-issues.md#x402-middleware-fails-open-on-body-parse) | Malformed JSON body bypasses payment check |
+| Core | [`x402-no-replay-prevention`](./bugs/known-issues.md#x402-no-replay-prevention) | One payment buys unlimited work until `validBefore` |
+| Core | [`x402-no-signature-verification`](./bugs/known-issues.md#x402-no-signature-verification) | EIP-3009 authorization signature is never verified |
+| Core | [`x402-balance-check-skipped-on-missing-contract-code`](./bugs/known-issues.md#x402-balance-check-skipped-on-missing-contract-code) | Misconfigured RPC silently skips balance check |
+| Gateway | [`context-window-hardcoded`](./bugs/known-issues.md#context-window-hardcoded) | Compaction threshold assumes 200k-token window |
+| Gateway | [`poll-budget-unbounded-wall-clock`](./bugs/known-issues.md#poll-budget-unbounded-wall-clock) | `sendAndPoll` can stall 5 minutes per tool call |
+| Gateway | [`no-session-concurrency-guard`](./bugs/known-issues.md#no-session-concurrency-guard) | Two `/plan` calls on the same session tangle histories |
+
+### Issue counts by subsystem
+
+| Subsystem | High | Medium | Low | Nit |
+|---|---:|---:|---:|---:|
+| Gateway | 3 | 11 | 13 | 4 |
+| Bindu Core (Python) | 4 | 7 | 3 | 0 |
+| SDKs (TypeScript) | — | — | — | — |
+| Frontend | — | — | — | — |
+
+**Found a new issue?** Open a GitHub Issue referencing the slug
+(e.g. *"Fixes `context-window-hardcoded`"*). **Fixed one?** Remove
+its entry from `known-issues.md` and add a dated postmortem under
+the matching `bugs/<subsystem>/` folder — see
+[`bugs/README.md`](./bugs/README.md) for the template.
+
+---
+
+<br/>
+
 ## 🤝 Contributing
 
 We welcome contributions! Join us on [Discord](https://discord.gg/3w5zuYUuwt). Pick the channel that best matches your contribution.

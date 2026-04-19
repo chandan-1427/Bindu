@@ -1,80 +1,177 @@
 # Known Issues
 
-Last updated: 2026-04-18 (Bindu Core review pass added;
-idor-task-context-no-ownership-check removed — see postmortem
-[`2026-04-18-idor-task-ownership.md`](./2026-04-18-idor-task-ownership.md))
+_Last updated: 2026-04-19 — restructured into scannable tables and story-format entries for the high-severity items._
 
-Things the project can't currently do, or that behave in surprising ways.
-Each entry has a workaround where one exists. If you hit one of these and
-want to help, open a GitHub Issue referencing the slug (e.g.
-"Fixes `context-window-hardcoded`").
+This file is user-facing. It's the first thing a new contributor or
+operator reads to calibrate expectations: what Bindu doesn't do
+today, and what behaves in surprising ways. Every entry has a
+workaround where one exists.
 
-**This file is user-facing.** It is the first thing a new contributor or
-operator reads to calibrate expectations. Entries are REMOVED from here
-as issues are fixed — if you're fixing one, delete its section in the
-same PR. If the fix teaches a generalizable lesson, also add a
-dated postmortem alongside this file in [`bugs/`](./) (see
-[`bugs/README.md`](./README.md) for the template).
+## How to read this file
 
-For the schema behind entries: severity is the impact if someone hits
-the limitation (`high` means it blocks common workflows; `low` means
-edge-case or workaround is easy); "tracking" is the GitHub Issue number
-if one exists.
+1. **Scan the tables first.** Each subsystem (Gateway, Bindu Core,
+   SDKs, Frontend) starts with a one-line-per-issue table — slug,
+   severity, short description. That's enough to decide whether an
+   issue matters to your deployment.
+2. **Read the story when it bites you.** High-severity entries
+   have a *Scenario* block telling you what the bug looks like
+   from the outside. Start there when you suspect you're hitting
+   one of these.
+3. **Medium / low / nit entries** stay terse — Summary /
+   Workaround / Tracking — because they're either easy to
+   understand or easy to work around.
 
-Entries in each area are ordered by severity: high → medium → low → nit.
-Within a severity bucket, order is arbitrary.
+Entries are **REMOVED** from this file as issues are fixed. If the
+fix teaches a generalizable lesson, a dated postmortem lands in the
+matching `bugs/<subsystem>/` folder:
+
+- [`bugs/gateway/`](./gateway/) — gateway postmortems
+- [`bugs/core/`](./core/) — Bindu Core (Python) postmortems
+- [`bugs/sdk/`](./sdk/) — SDK postmortems (none yet)
+- [`bugs/frontend/`](./frontend/) — frontend postmortems (none yet)
+
+See [`bugs/README.md`](./README.md) for the postmortem template.
+
+Reporting: if you hit one of these and want to help, open a GitHub
+Issue referencing the slug (e.g. "Fixes `context-window-hardcoded`").
+
+---
+
+## Table of contents
+
+| Subsystem | High | Medium | Low | Nit |
+|---|---:|---:|---:|---:|
+| [Gateway](#gateway) | 3 | 11 | 13 | 4 |
+| [Bindu Core (Python)](#bindu-core-python) | 4 | 7 | 3 | 0 |
+| [SDKs (TypeScript)](#sdks-typescript) | — | — | — | — |
+| [Frontend](#frontend) | — | — | — | — |
 
 ---
 
 ## Gateway
+
+### Quick index
+
+| Slug | Severity | One-line |
+|---|---|---|
+| [`context-window-hardcoded`](#context-window-hardcoded) | high | Compaction threshold assumes a 200k-token context window |
+| [`poll-budget-unbounded-wall-clock`](#poll-budget-unbounded-wall-clock) | high | `sendAndPoll` can stall 5 minutes per tool call |
+| [`no-session-concurrency-guard`](#no-session-concurrency-guard) | high | Two `/plan` calls on the same session tangle their histories |
+| [`abort-signal-not-propagated-to-bindu-client`](#abort-signal-not-propagated-to-bindu-client) | medium | Client disconnect doesn't cancel in-flight peer polls |
+| [`permission-rules-not-enforced-for-tool-calls`](#permission-rules-not-enforced-for-tool-calls) | medium | Permission service exists but is never called for tool calls |
+| [`tool-name-collisions-silent`](#tool-name-collisions-silent) | medium | `(agent, skill)` pairs can collide; second registration wins |
+| [`agent-catalog-overwrite`](#agent-catalog-overwrite) | medium | Each `/plan` wholesale-overwrites the session's agent catalog |
+| [`signature-verification-ok-when-unsigned`](#signature-verification-ok-when-unsigned) | medium (sec) | Unsigned peer responses indistinguishable from stripped signatures |
+| [`did-resolver-no-key-id-selection`](#did-resolver-no-key-id-selection) | medium (sec) | Resolver picks the first public key; breaks during rotation |
+| [`list-messages-pagination-silent`](#list-messages-pagination-silent) | medium | Sessions >1000 messages silently truncate oldest |
+| [`tool-input-sent-as-textpart`](#tool-input-sent-as-textpart) | medium | Skills expecting `DataPart` receive `TextPart` with stringified JSON |
+| [`no-rate-limit-cors-body-size-limit`](#no-rate-limit-cors-body-size-limit) | medium | No rate limit / CORS / body-size limit on the Hono app |
+| [`prompt-injection-scrubbing-theater`](#prompt-injection-scrubbing-theater) | medium (sec) | The regex scrubber offers false confidence |
+| [`no-graceful-shutdown`](#no-graceful-shutdown) | medium | In-flight `/plan` streams drop mid-frame on close |
+| [`assistant-message-lost-on-stream-error`](#assistant-message-lost-on-stream-error) | medium | Mid-stream errors lose completed tool calls from history |
+| [`json-schema-to-zod-incomplete`](#json-schema-to-zod-incomplete) | medium | Converter ignores `enum` / `oneOf` / pattern / etc. |
+| [`compaction-dedupe-single-process-only`](#compaction-dedupe-single-process-only) | low | Dedupe is in-process; horizontal scaling would race |
+| [`no-ttl-cleanup`](#no-ttl-cleanup) | low | `session.ttlDays` configured but no cleanup job runs |
+| [`token-estimation-chars-div-4`](#token-estimation-chars-div-4) | low | `chars/4` wrong for code and CJK |
+| [`did-resolver-no-stampede-protection`](#did-resolver-no-stampede-protection) | low | Simultaneous cache-miss fetches for the same DID |
+| [`bearer-env-error-collapses-to-transport`](#bearer-env-error-collapses-to-transport) | low | Missing env var surfaces as a generic transport error |
+| [`resume-race-duplicate-session`](#resume-race-duplicate-session) | low | Concurrent first-time `/plan` for a session throws 500 on second |
+| [`cancel-casing-not-retried`](#cancel-casing-not-retried) | low | `tasks/cancel` sends only camelCase; leaks tasks on snake-case peers |
+| [`health-endpoint-no-dependency-probe`](#health-endpoint-no-dependency-probe) | low | `GET /health` doesn't probe dependencies |
+| [`no-request-id-in-logs`](#no-request-id-in-logs) | low | No correlation ID for `/plan` requests |
+| [`no-config-hot-reload`](#no-config-hot-reload) | low | Config changes need a full restart |
+| [`resolve-env-limited-to-simple-var`](#resolve-env-limited-to-simple-var) | low | Env interpolation only matches bare `$VAR` |
+| [`compaction-summary-injected-as-user-role`](#compaction-summary-injected-as-user-role) | low | Summary injected as `role: "user"` — could confuse the LLM |
+| [`revert-millisecond-ties-nondeterministic`](#revert-millisecond-ties-nondeterministic) | low | Millisecond-tied `created_at` ordering is non-deterministic |
+| [`revert-doesnt-cancel-remote-tasks`](#revert-doesnt-cancel-remote-tasks) | low | `revertTo` doesn't cancel still-running peer tasks |
+| [`empty-agents-catalog-no-400`](#empty-agents-catalog-no-400) | low | `/plan` with empty `agents[]` runs and returns an LLM error |
+| [`no-migration-rollback`](#no-migration-rollback) | low | Migrations forward-only — no paired `down.sql` |
+| [`tasks-recorded-is-dead-state`](#tasks-recorded-is-dead-state) | nit | Unused `tasksRecorded` field in the planner |
+| [`map-finish-reason-pointless-ternary`](#map-finish-reason-pointless-ternary) | nit | Conditional type that evaluates to `any` either way |
+| [`db-effect-promise-swallows-errors`](#db-effect-promise-swallows-errors) | nit | `Effect.promise` silently swallows rejected promises |
+| [`test-coverage-gaps`](#test-coverage-gaps) | nit | Backlog list of missing test scenarios |
 
 ### High
 
 ### context-window-hardcoded
 
 **Severity:** high
-**Summary:** The compaction threshold in
+
+> **Scenario.** You switch the gateway to GPT-4o-mini (128k context).
+> After a few long turns, the next planner request sends >128k
+> tokens to the provider and gets back a `context_length_exceeded`
+> 400. You check the logs expecting to see compaction kick in.
+> It didn't. The threshold is hardwired to 200k.
+
+**What's wrong.** The compaction threshold in
 [`gateway/src/session/overflow.ts`](../gateway/src/session/overflow.ts)
-assumes a 200,000-token context window (Claude Opus 4.x). Using a
-smaller model (GPT-4o-mini at 128k, Haiku at 200k, Gemini Flash at
-1M, etc.) means compaction fires at the wrong time — either too late
-(provider rejects the request for overflow before compaction runs) or
-too early (unnecessary summarization cost).
-**Workaround:** Pass an explicit `threshold.contextWindow` matching
-your actual model when calling `compactIfNeeded`. For multi-model
-deployments this needs per-model configuration the gateway doesn't
-currently expose.
+assumes a 200,000-token context window (Claude Opus 4.x). Smaller
+models (GPT-4o-mini 128k, Haiku 200k) or much larger ones (Gemini
+Flash 1M) make compaction fire at the wrong time — either too late
+(provider rejects for overflow before compaction runs) or too
+early (unnecessary summarization cost).
+
+**Workaround:** Pass an explicit `threshold.contextWindow`
+matching your actual model when calling `compactIfNeeded`. For
+multi-model deployments this needs per-model configuration the
+gateway doesn't currently expose.
+
 **Tracking:** _(no issue yet)_
 
 ### poll-budget-unbounded-wall-clock
 
 **Severity:** high
-**Summary:** `sendAndPoll` in
+
+> **Scenario.** A `/plan` request makes one tool call to a Bindu
+> peer. The peer is stuck in `working` state and never advances.
+> `sendAndPoll` retries 60 times with exponential backoff —
+> **five minutes worst case, per tool call.** Meanwhile the SSE
+> stream to the user stays open, the session row stays locked,
+> and the user's browser eventually gives up. The peer poll keeps
+> running.
+
+**What's wrong.** `sendAndPoll` in
 [`gateway/src/bindu/client/poll.ts`](../gateway/src/bindu/client/poll.ts)
-defaults to 60 polls × backoff up to 10 s — worst case ≈ 5 minutes
-PER TOOL CALL. A hung peer stalls the planner indefinitely, holds
-the `/plan` SSE stream open, and blocks the session row from being
-usable. There is no overall deadline for the plan, only a per-HTTP
-timeout on the individual JSON-RPC round trip.
-**Workaround:** Pass an explicit `maxPolls` or shorter `backoffMs`
-schedule when instantiating the Bindu client. For request-level
-deadlines the caller must enforce them externally (e.g. client-side
-timeout on the SSE `fetch`).
+defaults to 60 polls × backoff up to 10 s. There's no
+overall `/plan` deadline, only a per-HTTP timeout on the
+individual JSON-RPC round trip. A single hung peer can stall an
+entire plan indefinitely.
+
+**Workaround:** Pass an explicit `maxPolls` or shorter
+`backoffMs` schedule when instantiating the Bindu client. Client
+disconnects don't help — see
+`abort-signal-not-propagated-to-bindu-client` below. For
+request-level deadlines the caller must enforce them externally
+(e.g. client-side timeout on the SSE `fetch`).
+
 **Tracking:** _(no issue yet)_
 
 ### no-session-concurrency-guard
 
 **Severity:** high
-**Summary:** Two `/plan` requests sharing the same `session_id` both
-append to `gateway_messages` with no serialization. Their histories
-interleave — the planner in request A can see request B's
-half-written tool results or vice versa, and the LLM's tool_use /
-tool_result pairing can silently tangle across sessions. The
-compaction dedupe fix ([commit 0655ac1](../commit/0655ac1)) prevents
-compaction races but does NOT serialize plan turns themselves.
-**Workaround:** Clients should not run concurrent `/plan` requests
-against the same session. If concurrent use is genuine (multiple
-tabs, etc.), use distinct session IDs and reconcile externally.
+
+> **Scenario.** Alice has two browser tabs on the same session.
+> Tab 1 sends `/plan`. Before it finishes, tab 2 sends another
+> `/plan` for the same session. Both planners append to
+> `gateway_messages` concurrently. The second LLM call sees the
+> first call's half-written `tool_use` without its paired
+> `tool_result` — the assistant message sequence is now broken.
+> LLM hallucinates or errors. Worse: the session's history is now
+> permanently in an inconsistent state on disk.
+
+**What's wrong.** Two `/plan` requests sharing the same
+`session_id` both append to `gateway_messages` with no
+serialization. Their histories interleave and the LLM's
+`tool_use` / `tool_result` pairing silently tangles across
+sessions. The compaction dedupe fix ([commit 0655ac1](../commit/0655ac1))
+prevents *compaction* races but does not serialize plan turns
+themselves.
+
+**Workaround:** Clients should not run concurrent `/plan`
+requests against the same session. For genuine concurrent use
+(multiple tabs, etc.), use distinct session IDs and reconcile
+externally.
+
 **Tracking:** _(no issue yet)_
 
 ### Medium
@@ -84,12 +181,12 @@ tabs, etc.), use distinct session IDs and reconcile externally.
 **Severity:** medium
 **Summary:** When a client disconnects mid-`/plan`, the gateway's
 SSE handler aborts — but in-flight polling loops against downstream
-Bindu agents (`gateway/src/bindu/client/poll.ts`) do not cancel. Each
-in-flight tool call continues for up to 60 attempts × backoff
-(≈ 5 minutes worst case) after the user is gone.
+Bindu agents ([`gateway/src/bindu/client/poll.ts`](../gateway/src/bindu/client/poll.ts))
+do not cancel. Each in-flight tool call continues for up to 60
+attempts × backoff (≈ 5 minutes worst case) after the user is gone.
 **Workaround:** None client-side. Accept that aborted `/plan`
-requests may leave stragglers consuming gateway + peer compute
-for several minutes.
+requests may leave stragglers consuming gateway + peer compute for
+several minutes.
 **Tracking:** _(no issue yet)_ (related to `poll-budget-unbounded-wall-clock`)
 
 ### permission-rules-not-enforced-for-tool-calls
@@ -98,9 +195,10 @@ for several minutes.
 **Summary:** `agents/planner.md` declares `permission: agent_call:
 ask`, and the Permission service exists and evaluates wildcards
 correctly. But the planner's tool-execution path
-(`gateway/src/session/prompt.ts`) never calls
-`Permission.Service.evaluate()` before running a Bindu tool. The
-permission system is effectively dead code for tool calls today.
+([`gateway/src/session/prompt.ts`](../gateway/src/session/prompt.ts))
+never calls `Permission.Service.evaluate()` before running a Bindu
+tool. The permission system is effectively dead code for tool calls
+today.
 **Workaround:** Control tool access via the `agents[]` catalog the
 caller sends in the `/plan` request — only include agents the caller
 is allowed to invoke.
@@ -118,8 +216,7 @@ e.g. agent `research-v2` + skill `x` and agent `research_v2` + skill
 silently overwrites the first. A companion bug: `parseAgentFromTool`
 uses a non-greedy regex `^call_(.+?)_(.+)$`, so an agent whose name
 contains an underscore parses as `agent=first-segment`,
-`skill=everything-else` — wrong for the SSE event the handler
-emits.
+`skill=everything-else` — wrong for the SSE event the handler emits.
 **Workaround:** Use globally-unique agent names in the catalog;
 avoid both hyphens and underscores in the same naming scheme; avoid
 underscores in agent names entirely if you rely on the `task.started`
@@ -135,7 +232,7 @@ omits an agent from a subsequent turn's catalog (e.g. temporary
 unreachability, inventory churn), the gateway drops it from the
 session's recorded catalog even though the session's history
 references its prior tool calls. Also exposed to a concurrency race
-(see [`2026-04-18-compaction-concurrent-races.md`](./2026-04-18-compaction-concurrent-races.md)
+(see [`2026-04-18-compaction-concurrent-races.md`](./gateway/2026-04-18-compaction-concurrent-races.md)
 — same shape, different column).
 **Workaround:** Always send the full agent catalog on every turn,
 even if individual agents are temporarily unavailable.
@@ -194,13 +291,12 @@ grow large. Long-term, paginate via `created_at` cursor.
 **Severity:** medium
 **Summary:** The planner's tool-execution path
 ([`gateway/src/planner/index.ts`](../gateway/src/planner/index.ts))
-serializes arguments with `JSON.stringify(args)` and sends them as
-a Bindu `TextPart`. Many deployed skills expect a structured
+serializes arguments with `JSON.stringify(args)` and sends them as a
+Bindu `TextPart`. Many deployed skills expect a structured
 `DataPart` (`{kind:"data", data:{…}}`) — especially skills whose
 server-side validator parses a typed input schema. Skills that only
-accept `DataPart` will reject the `TextPart` outright; skills that
-try to parse the JSON string out of a text field will behave
-unpredictably.
+accept `DataPart` reject the `TextPart` outright; skills that try to
+parse the JSON string out of a text field behave unpredictably.
 **Workaround:** None client-side — the gateway always sends
 `TextPart`. Affected skills must accept either form on their server
 side until this is fixed.
@@ -239,8 +335,8 @@ defense because downstream code may assume it's doing something.
 resistance. For untrusted peers, apply one or more of: (a) isolate
 peer output into an LLM sub-call with its own restricted system
 prompt that produces structured data, not free-form instructions;
-(b) use provider-side structured-output / tool-choice constraints
-to prevent the planner from obeying arbitrary peer instructions;
+(b) use provider-side structured-output / tool-choice constraints to
+prevent the planner from obeying arbitrary peer instructions;
 (c) cap peer responses to a strict JSON schema server-side.
 **Tracking:** _(no issue yet)_
 
@@ -285,10 +381,9 @@ converts an inbound skill's `inputSchema` to a Zod validator for the
 planner LLM. It handles `type: string|number|integer|boolean|array|
 object` but ignores every other keyword: `enum`, `oneOf`, `anyOf`,
 `pattern`, `minLength`/`maxLength`, `minimum`/`maximum`,
-`additionalProperties`, `format`, and more. The planner LLM
-therefore receives no signal about valid values; invalid input
-passes local validation and reaches the peer, failing late with a
-JSON-RPC error.
+`additionalProperties`, `format`, and more. The planner LLM therefore
+receives no signal about valid values; invalid input passes local
+validation and reaches the peer, failing late with a JSON-RPC error.
 **Workaround:** Skills should document their full input constraints
 in their human-readable `description` so the planner LLM picks them
 up from the prompt rather than the schema.
@@ -301,11 +396,11 @@ up from the prompt rather than the schema.
 **Severity:** low (correct today, architectural ceiling)
 **Summary:** The fix for concurrent compaction races
 ([commit 0655ac1](../commit/0655ac1) /
-[`2026-04-18-compaction-concurrent-races.md`](./2026-04-18-compaction-concurrent-races.md))
+[`2026-04-18-compaction-concurrent-races.md`](./gateway/2026-04-18-compaction-concurrent-races.md))
 uses an in-process `Map<SessionID, Promise>`. A horizontally-scaled
 deployment of the gateway (multiple Node processes fronting one
-Supabase) could still race across processes. Single-process
-Phase 1 is correct.
+Supabase) could still race across processes. Single-process Phase 1
+is correct.
 **Workaround:** Run a single gateway process. Horizontal scaling is
 a Phase 2 concern — when it lands, add a Postgres version column on
 `gateway_sessions` with optimistic-concurrency semantics in the
@@ -344,9 +439,9 @@ CJK-language content.
 **Severity:** low
 **Summary:** The DID resolver in
 [`gateway/src/bindu/identity/resolve.ts`](../gateway/src/bindu/identity/resolve.ts)
-caches DID Documents with a 5-minute TTL. When the cache expires
-(or is cold on first call), concurrent `resolve()` calls for the
-same DID all miss and issue simultaneous HTTP fetches to the peer's
+caches DID Documents with a 5-minute TTL. When the cache expires (or
+is cold on first call), concurrent `resolve()` calls for the same
+DID all miss and issue simultaneous HTTP fetches to the peer's
 `/did/resolve`. Functionally harmless; wasteful.
 **Workaround:** None needed in practice — 5 minutes is long enough
 that stampedes are rare. If they become a problem, add a
@@ -374,10 +469,9 @@ present in the error string, just buried under `"transport:"`.
 **Summary:** Two concurrent `/plan` requests with the same
 `session_id` where neither yet exists in `gateway_sessions` will
 both miss the `getSession` lookup and both call `sessions.create()`,
-producing two rows with the same `external_session_id`. The
-`UNIQUE` constraint on `external_session_id` will cause the second
-insert to fail — the second request errors back to the caller with
-a 500.
+producing two rows with the same `external_session_id`. The `UNIQUE`
+constraint on `external_session_id` will cause the second insert to
+fail — the second request errors back to the caller with a 500.
 **Workaround:** Retry the failing request. The first insert
 succeeded, so a retry resolves to the existing row.
 **Tracking:** _(no issue yet)_
@@ -390,8 +484,8 @@ succeeded, so a retry resolves to the existing row.
 it issues a best-effort `tasks/cancel` to the peer. That cancel
 sends `taskId` in camelCase only — it never does the snake_case
 retry flip that the poll loop itself performs. For peers that
-require `task_id` in snake_case (the very case the flip exists
-for), the cancel silently fails and the remote task leaks.
+require `task_id` in snake_case (the very case the flip exists for),
+the cancel silently fails and the remote task leaks.
 **Workaround:** None. Peers that require snake-case params for
 `tasks/cancel` need to support camelCase too, or the task will
 orphan on poll timeout.
@@ -402,10 +496,10 @@ orphan on poll timeout.
 **Severity:** low
 **Summary:** `GET /health`
 ([`gateway/src/server/index.ts`](../gateway/src/server/index.ts))
-returns `200 {ok: true}` regardless of whether Supabase is
-reachable or the configured LLM provider is accepting requests.
-Load balancers see "healthy" while the gateway is unable to serve
-`/plan` traffic. Good for liveness, useless for readiness.
+returns `200 {ok: true}` regardless of whether Supabase is reachable
+or the configured LLM provider is accepting requests. Load balancers
+see "healthy" while the gateway is unable to serve `/plan` traffic.
+Good for liveness, useless for readiness.
 **Workaround:** Add a separate readiness check in your deployment
 that hits `/plan` with a no-op payload and a short deadline.
 **Tracking:** _(no issue yet)_
@@ -418,9 +512,8 @@ ID, or tracing context. When an SSE stream errors and the client
 reports a problem, there's no way to correlate the client's
 observation with a server-side log line. Server-side logs don't
 include session ID either for most events.
-**Workaround:** Set `X-Request-Id` on the reverse proxy and
-include it in proxy access logs; correlate by timestamp and peer
-URL.
+**Workaround:** Set `X-Request-Id` on the reverse proxy and include
+it in proxy access logs; correlate by timestamp and peer URL.
 **Tracking:** _(no issue yet)_
 
 ### no-config-hot-reload
@@ -476,8 +569,8 @@ millisecond (rare but possible under contention), their relative
 order is non-deterministic — revert may include or exclude some of
 them based on DB-internal ordering.
 **Workaround:** Inspect the reverted row set after a revert;
-manually unmark any mis-reverted rows. A Phase 2 fix would switch
-to a monotonically-increasing `seq` column.
+manually unmark any mis-reverted rows. A Phase 2 fix would switch to
+a monotonically-increasing `seq` column.
 **Tracking:** _(no issue yet)_
 
 ### revert-doesnt-cancel-remote-tasks
@@ -510,13 +603,13 @@ or pre-validate the `agents.length` client-side.
 ### no-migration-rollback
 
 **Severity:** low
-**Summary:** Migrations under `gateway/migrations/` are
-forward-only — no paired `down.sql` for each change. Reverting a
-migration requires manual SQL work.
-**Workaround:** For a production deployment that may need
-rollback, maintain rollback scripts outside the `migrations/`
-folder. This is a common choice for small projects; fix only if
-the team actively needs reversible migrations.
+**Summary:** Migrations under `gateway/migrations/` are forward-only
+— no paired `down.sql` for each change. Reverting a migration
+requires manual SQL work.
+**Workaround:** For a production deployment that may need rollback,
+maintain rollback scripts outside the `migrations/` folder. This is
+a common choice for small projects; fix only if the team actively
+needs reversible migrations.
 **Tracking:** _(no issue yet)_
 
 ### Nits
@@ -549,10 +642,10 @@ information.
 [`gateway/src/db/index.ts`](../gateway/src/db/index.ts) use
 `Effect.promise(...)` which resolves even when the underlying
 promise rejects (it treats rejection as a defect, not an Effect
-error). Transient Supabase failures at those call sites may
-silently resolve without being surfaced to the caller.
-**Workaround:** None client-side. Audit `Effect.promise` call
-sites; prefer `Effect.tryPromise` with an explicit `catch` for any
+error). Transient Supabase failures at those call sites may silently
+resolve without being surfaced to the caller.
+**Workaround:** None client-side. Audit `Effect.promise` call sites;
+prefer `Effect.tryPromise` with an explicit `catch` for any
 non-trivial operation.
 **Tracking:** _(no issue yet)_
 
@@ -561,9 +654,9 @@ non-trivial operation.
 **Severity:** nit
 **Summary:** The test suite does not cover: concurrent `/plan`
 requests end-to-end (only the pubsub filter is tested); compaction
-correctness on long multi-pass sessions (only the wrapper dedupe
-and summarizer prompt are tested); revert; SSE frame ordering
-under load; non-English payloads; sessions larger than the 1000-row
+correctness on long multi-pass sessions (only the wrapper dedupe and
+summarizer prompt are tested); revert; SSE frame ordering under
+load; non-English payloads; sessions larger than the 1000-row
 pagination limit; missing `bearer_env` env vars; aborted requests
 propagating to the Bindu client; the snake_case flip on
 `tasks/cancel`.
@@ -576,116 +669,151 @@ test for it in the same PR.
 
 ## Bindu Core (Python)
 
+### Quick index
+
+| Slug | Severity | One-line |
+|---|---|---|
+| [`x402-middleware-fails-open-on-body-parse`](#x402-middleware-fails-open-on-body-parse) | high (sec) | Malformed body parse lets request through without payment |
+| [`x402-no-replay-prevention`](#x402-no-replay-prevention) | high (sec) | Payment proofs are reusable until `validBefore` |
+| [`x402-no-signature-verification`](#x402-no-signature-verification) | high (sec) | EIP-3009 authorization signature is never verified |
+| [`x402-balance-check-skipped-on-missing-contract-code`](#x402-balance-check-skipped-on-missing-contract-code) | high (sec) | Missing RPC contract-code silently skips balance check |
+| [`authz-scope-check-behind-optional-flag`](#authz-scope-check-behind-optional-flag) | medium (sec) | Scope check is optional; flipping the flag removes all authz |
+| [`did-admission-control-missing`](#did-admission-control-missing) | medium (sec) | No allowlist — any Hydra-registered DID can call |
+| [`cors-allow-credentials-with-user-origins`](#cors-allow-credentials-with-user-origins) | medium (sec) | Credentials + loose origins risk credentialed CORS |
+| [`hydra-token-cache-revocation-lag`](#hydra-token-cache-revocation-lag) | medium (sec) | Revoked tokens valid for up to 5 min |
+| [`task-cancel-check-then-act-race`](#task-cancel-check-then-act-race) | medium | TOCTOU between state check and scheduler cancel |
+| [`no-rate-limit-or-quota-per-caller`](#no-rate-limit-or-quota-per-caller) | medium | No per-caller quota; single caller can exhaust resources |
+| [`context-id-silent-fallback`](#context-id-silent-fallback) | medium | Malformed `context_id` silently creates a new context |
+| [`did-signature-overbroad-exception-catch`](#did-signature-overbroad-exception-catch) | low (hyg) | Bare `except Exception` in `verify_signature` masks bugs |
+| [`artifact-name-not-sanitized`](#artifact-name-not-sanitized) | low (sec) | Agent-supplied artifact names not basenamed |
+| [`did-document-endpoint-returns-raw-dict`](#did-document-endpoint-returns-raw-dict) | low | DID doc endpoint bypasses alias serialization |
+
 ### High
-
-### did-signature-fails-open-on-missing-headers
-
-**Severity:** high (security, authentication bypass)
-**Summary:** `_verify_did_signature_asgi` in
-[`bindu/server/middleware/auth/hydra.py`](../bindu/server/middleware/auth/hydra.py)
-lines 164–169 returns `is_valid=True` (with
-`{"did_verified": False, "reason": "no_signature_headers"}`) when a
-DID-style OAuth client makes a request without `X-DID-Signature`
-headers. The caller at line 274 only rejects when `is_valid=False`,
-so DID-based signing is effectively optional — any holder of a valid
-bearer token whose `client_id` starts with `did:` can skip the
-signature layer by simply omitting the headers. The same fail-open
-exists on lines 174–176 when the Hydra client metadata returns no
-public key.
-**Workaround:** If DID signing must be enforced in production, front
-the service with a reverse proxy that rejects requests missing
-`X-DID-Signature` when the caller identity requires it, or run a
-custom middleware in front of the Hydra middleware that makes the
-signature mandatory. The correct fix is to change both branches to
-return `False` so the request is rejected.
-**Tracking:** _(no issue yet)_
 
 ### x402-middleware-fails-open-on-body-parse
 
 **Severity:** high (security, payment bypass)
-**Summary:** The x402 payment middleware at
+
+> **Scenario.** An attacker sends a malformed JSON body (truncated,
+> wrong encoding, bad UTF-8) to a x402-protected endpoint. Python's
+> `json.loads` throws. The middleware's bare `except Exception:`
+> catches it — and calls `await call_next(request)` anyway. The
+> request reaches the agent. The agent runs. No payment was checked.
+
+**What's wrong.** The x402 payment middleware at
 [`bindu/server/middleware/x402/x402_middleware.py`](../bindu/server/middleware/x402/x402_middleware.py)
-lines 213–215 wraps the initial JSON-RPC body parse in a bare
-`except Exception:` and calls `await call_next(request)` on failure.
-Any client that can cause the parse to throw — malformed JSON,
-unexpected encoding, truncated body — reaches the agent without a
-payment check. The same bare except also masks real bugs during
+lines 213–215 wraps the initial JSON-RPC body parse in
+`except Exception` and calls `call_next(request)` on failure. Any
+client that can cause the parse to throw reaches the agent without
+a payment check. The bare `except` also masks real bugs during
 parsing. Adjacent concern: the subsequent check is
-`if method not in app_settings.x402.protected_methods`, so a request
-that parses but reports an unknown method also bypasses payment.
-**Workaround:** Configure x402 only when no protected methods can be
-avoided by crafting the request body; otherwise treat the x402
-middleware as advisory. The fix is to return a 402 response on parse
-failure and narrow the exception to `json.JSONDecodeError` and
-`UnicodeDecodeError`.
+`if method not in app_settings.x402.protected_methods`, so a
+request that parses but reports an unknown method also bypasses
+payment.
+
+**Workaround.** Configure x402 only when no protected methods can
+be avoided by crafting the request body; otherwise treat the x402
+middleware as advisory. The fix is to return a 402 response on
+parse failure and narrow the exception to `json.JSONDecodeError`
+and `UnicodeDecodeError`.
+
 **Tracking:** _(no issue yet)_
 
 ### x402-no-replay-prevention
 
 **Severity:** high (security, payment bypass)
-**Summary:** `_validate_payment_manually` in
+
+> **Scenario.** Alice pays $10 once. The server returns her a
+> payment token. She puts it in `X-PAYMENT` for Request A — valid,
+> task runs, she's charged $10 on-chain. She puts the **same token**
+> in `X-PAYMENT` for Request B — still valid, task runs, **no
+> additional charge.** And Request C. And D. All until the
+> `validBefore` window closes (seconds to minutes). One payment
+> buys unlimited work.
+
+**What's wrong.** `_validate_payment_manually` in
 [`bindu/server/middleware/x402/x402_middleware.py`](../bindu/server/middleware/x402/x402_middleware.py)
 lines 282–394 performs five checks (scheme, authorization presence,
 amount-minimum, network match, on-chain balance) but never records
-or looks up the `(nonce, payer)` or `(txhash, chain)` of the payment.
-The same `X-PAYMENT` header is accepted on every request and the
-payment session token returned by
+or looks up the `(nonce, payer)` or `(txhash, chain)`. The same
+`X-PAYMENT` header is accepted on every request and the payment
+session token returned by
 [`bindu/server/endpoints/payment_sessions.py`](../bindu/server/endpoints/payment_sessions.py)
-is never marked consumed. A client who pays once can reuse the proof
-across unlimited requests until the authorization's `validBefore`
-expires.
-**Workaround:** Set short `validBefore` windows on the EIP-3009
+is never marked consumed.
+
+**Workaround.** Set short `validBefore` windows on the EIP-3009
 authorization issued to clients, reducing the replay window to
 seconds. The real fix is to persist `(nonce, payer_address)` in a
-dedupe store (Redis `SETNX` keyed by nonce, TTL ≥ `validBefore`) and
-reject any payload whose nonce is already present.
+dedupe store (Redis `SETNX` keyed by nonce, TTL ≥ `validBefore`)
+and reject any payload whose nonce is already present.
+
 **Tracking:** _(no issue yet)_
 
 ### x402-no-signature-verification
 
 **Severity:** high (security, payment forgery)
-**Summary:** The validation routine at
+
+> **Scenario.** Mallory looks up Alice's public wallet address
+> on-chain (it's public). She knows Alice holds USDC. Mallory
+> constructs a plausible-looking EIP-3009 `TransferWithAuthorization`
+> payload claiming Alice's address as payer, with any amount she
+> wants, **and any signature bytes she feels like pasting in.** She
+> sends it to the agent. The middleware checks: scheme ✓, network
+> ✓, amount ✓, Alice has a balance ✓ — **never verifies the
+> signature.** Request accepted. Mallory gets work; Alice sees no
+> charge (the forged authorization doesn't clear on-chain) but the
+> agent burned its compute anyway.
+
+**What's wrong.** The validation routine at
 [`bindu/server/middleware/x402/x402_middleware.py`](../bindu/server/middleware/x402/x402_middleware.py)
 lines 282–394 checks amount, network, and payer balance but never
 verifies the EIP-3009 `TransferWithAuthorization` signature against
-the payer's address. Any client that knows the payer's public
-address and a valid USDC balance can construct a payload and pass
-validation without ever signing it. The docstring at line 292 even
-labels the signature check "optional" — the actual call does not
-verify it. Combined with `x402-no-replay-prevention`, this means
-there is no cryptographic binding between the caller and the
-payment.
-**Workaround:** Do not rely on x402 for revenue protection in the
+the payer's address. The docstring at line 292 even labels the
+signature check "optional" — and the actual call doesn't verify it.
+Combined with `x402-no-replay-prevention`, there is no
+cryptographic binding between the caller and the payment.
+
+**Workaround.** Do not rely on x402 for revenue protection in the
 current release. If revenue matters, sit x402 behind a proxy that
 verifies the signature out-of-band, or disable x402 and use a
 pre-paid credits model backed by an authenticated account. The fix
 is to call `eth_account.Account.recover_message` (or equivalent) on
 the EIP-3009 typed-data digest and reject if the recovered address
 does not match `auth.from_`.
+
 **Tracking:** _(no issue yet)_
 
 ### x402-balance-check-skipped-on-missing-contract-code
 
 **Severity:** high (security, payment bypass)
-**Summary:**
+
+> **Scenario.** An operator sets `payment_requirements.asset` to the
+> wrong USDC contract address (typo, wrong chain). Or their RPC
+> provider has a transient outage and `eth.get_code()` returns empty
+> bytes. The middleware notices "no contract at this address" and
+> logs `"Skipping balance check"` — then **returns `True`** (valid
+> payment). An attacker with a zero-balance address can pay and get
+> work.
+
+**What's wrong.**
 [`bindu/server/middleware/x402/x402_middleware.py`](../bindu/server/middleware/x402/x402_middleware.py)
-lines 348–352 skip the on-chain balance check when `w3.eth.get_code`
-returns empty bytes for the configured token asset. A misconfigured
+lines 348–352 skip the on-chain balance check when
+`w3.eth.get_code` returns empty bytes. A misconfigured
 `payment_requirements.asset`, a transient RPC fault, or an operator
-pointing at a fork where the token is not yet deployed all cause the
-balance check to silently no-op. The outer `except Exception` at
-line 377 correctly fails closed if the balance call itself throws,
-but the "no code" branch is a logged warning and a fall-through to
-`return True`. An attacker who can influence the RPC provider's
-response (or who simply benefits from operator misconfiguration) can
-pay with a zero balance.
-**Workaround:** Monitor logs for
+pointing at a fork where the token is not yet deployed all cause
+the balance check to silently no-op. The outer `except Exception`
+at line 377 correctly fails closed if the balance call itself
+throws, but the "no code" branch is a logged warning and a
+fall-through to `return True`.
+
+**Workaround.** Monitor logs for
 `"No contract found at … Skipping balance check"` — if it appears
-in production, payment is effectively disabled. Pin a known-good RPC
-endpoint and verify the token address on startup. The fix is to
-reject payment (not skip) when the contract is not found, and to
-validate `asset` against a hardcoded list of known USDC addresses
-per chain at startup.
+in production, payment is effectively disabled. Pin a known-good
+RPC endpoint and verify the token address on startup. The fix is
+to reject payment (not skip) when the contract is not found, and
+to validate `asset` against a hardcoded list of known USDC
+addresses per chain at startup.
+
 **Tracking:** _(no issue yet)_
 
 ### Medium
@@ -696,12 +824,12 @@ per chain at startup.
 **Summary:** The scope check in
 [`bindu/server/endpoints/a2a_protocol.py`](../bindu/server/endpoints/a2a_protocol.py)
 line 153 is wrapped in
-`if app_settings.auth.require_permissions:`. When the flag is
-falsy (common during bringup, demos, or debugging), the A2A endpoint
+`if app_settings.auth.require_permissions:`. When the flag is falsy
+(common during bringup, demos, or debugging), the A2A endpoint
 accepts any authenticated token for any method — there is no
 authorization layer at all, only authentication. Authorization being
-a feature flag is a deployment landmine: an operator who turns it off
-to "unblock" something forgets to turn it back on and ships a
+a feature flag is a deployment landmine: an operator who turns it
+off to "unblock" something forgets to turn it back on and ships a
 scopeless service.
 **Workaround:** Always deploy with `require_permissions: true` and
 define per-method scopes in `auth.permissions`. Treat the flag as
@@ -714,13 +842,13 @@ refuses to boot when the flag is false and auth is enabled.
 **Severity:** medium (security, admission control)
 **Summary:**
 [`bindu/server/middleware/auth/hydra.py`](../bindu/server/middleware/auth/hydra.py)
-verifies that an inbound request was signed by the private key of the
-DID declared in the OAuth token's `client_id`. Crypto is correct:
-forging signatures for a known DID is not feasible. But there is no
-admission-control layer above that — the server trusts ANY
-Hydra-registered DID that presents a valid OAuth token and a valid
-signature. No allowlist, no trust-chain check, no pattern match
-against an expected DID namespace.
+verifies that an inbound request was signed by the private key of
+the DID declared in the OAuth token's `client_id`. Crypto is
+correct: forging signatures for a known DID is not feasible. But
+there is no admission-control layer above that — the server trusts
+ANY Hydra-registered DID that presents a valid OAuth token and a
+valid signature. No allowlist, no trust-chain check, no pattern
+match against an expected DID namespace.
 
 Concretely: in a multi-tenant deployment (or one where Hydra's
 admin API is reachable by more than the operator), a third party
@@ -730,14 +858,16 @@ validates (Hydra issued it), their signature validates (they hold
 the matching private key), and the request reaches the handler.
 
 What they gain:
+
 - Ability to submit tasks — the agent burns its compute / LLM
   budget executing on their behalf.
 - The response stream — they get whatever the agent produces.
 
 What they cannot do (already mitigated):
+
 - Read other tenants' tasks — PR #460
   (`idor-task-context-no-ownership-check`, see postmortem
-  [`2026-04-18-idor-task-ownership.md`](./2026-04-18-idor-task-ownership.md))
+  [`2026-04-18-idor-task-ownership.md`](./core/2026-04-18-idor-task-ownership.md))
   scopes reads and lists by `owner_did`. Rows they create are only
   visible to them.
 
@@ -770,12 +900,12 @@ operator-supplied list. Starlette does reject the literal wildcard
 `["*"]` with credentials, but an operator passing
 `["https://example.com", "null"]`, a reflected-origin scheme, or
 simply an over-broad list (every internal tool) still gets a
-credentialed cross-origin surface. There is no startup assertion that
-the supplied origins are compatible with `allow_credentials=True`.
-**Workaround:** Set `cors_origins` to an exhaustive, minimal list of
-known origins. Never include `"null"`, `"*"`, or a reflected-origin
-scheme. If possible, terminate CORS at a reverse proxy and leave
-`cors_origins=None` on the Bindu app.
+credentialed cross-origin surface. There is no startup assertion
+that the supplied origins are compatible with `allow_credentials=True`.
+**Workaround:** Set `cors_origins` to an exhaustive, minimal list
+of known origins. Never include `"null"`, `"*"`, or a
+reflected-origin scheme. If possible, terminate CORS at a reverse
+proxy and leave `cors_origins=None` on the Bindu app.
 **Tracking:** _(no issue yet)_
 
 ### hydra-token-cache-revocation-lag
@@ -788,10 +918,10 @@ Revoking a token in Hydra does not clear this in-process cache, so
 revoked tokens remain valid for up to five minutes across all Bindu
 instances that already cached them. For sensitive operations
 (admin, payment capture, key rotation) that window is too long.
-**Workaround:** Reduce `CACHE_TTL_SECONDS` for high-risk deployments,
-or disable the cache for specific scopes. The fix is a revocation
-callback from Hydra (or a short TTL with aggressive eviction) that
-invalidates the cache entry on `revoke_token`.
+**Workaround:** Reduce `CACHE_TTL_SECONDS` for high-risk
+deployments, or disable the cache for specific scopes. The fix is a
+revocation callback from Hydra (or a short TTL with aggressive
+eviction) that invalidates the cache entry on `revoke_token`.
 **Tracking:** _(no issue yet)_
 
 ### task-cancel-check-then-act-race
@@ -820,12 +950,12 @@ returns false when the state has already moved.
 **Summary:** The A2A endpoint, the scheduler, and `ManifestWorker`
 all run without per-caller quotas or global concurrency caps. A
 single authenticated DID can fire `message/send` in a loop and
-exhaust the scheduler queue, MongoDB writes, and memory (tasks are
+exhaust the scheduler queue, storage writes, and memory (tasks are
 kept hot for fast lookup). Request-body size is also uncapped on
 the Bindu app (Starlette default, no explicit limit). Nothing in
-`bindu/server/applications.py` or `bindu/server/endpoints/a2a_protocol.py`
-imposes rate limits, per-caller task caps, or a worker-pool
-semaphore.
+`bindu/server/applications.py` or
+`bindu/server/endpoints/a2a_protocol.py` imposes rate limits,
+per-caller task caps, or a worker-pool semaphore.
 **Workaround:** Deploy behind a reverse proxy (nginx, Cloudflare,
 API Gateway) that enforces request-rate and body-size limits per
 client IP or DID. Operators running Bindu directly on the public
@@ -834,28 +964,6 @@ at the `TaskManager.send_message` level plus an explicit body-size
 limit on the Starlette app.
 **Tracking:** _(no issue yet)_ (shape-equivalent to the gateway's
 `no-rate-limit-cors-body-size-limit` entry)
-
-### types-populate-by-name-missing
-
-**Severity:** medium (developer experience, cross-SDK compat)
-**Summary:** All types in
-[`bindu/common/protocol/types.py`](../bindu/common/protocol/types.py)
-are decorated with
-`@pydantic.with_config(ConfigDict(alias_generator=to_camel))` and the
-server dumps responses with `by_alias=True`. The wire format is
-therefore correctly camelCase (A2A 0.3.0 compliant). But
-`populate_by_name=True` is *not* set, so on input the Python
-validator only accepts the camelCase alias (`contextId`,
-`messageId`, `taskId`). A Python-native client that hand-builds the
-request with snake_case keys (`context_id`, `message_id`, `task_id`)
-fails validation or silently drops fields. This confuses developers
-because the Python code itself uses snake_case attribute names; the
-asymmetry is invisible until something breaks at the wire.
-**Workaround:** Always send camelCase on the wire, even from Python
-clients. The one-line fix is to add `populate_by_name=True` to the
-`ConfigDict` on every typed dict, which makes the server accept
-either form on input while keeping camelCase on output.
-**Tracking:** _(no issue yet)_
 
 ### context-id-silent-fallback
 
@@ -901,7 +1009,7 @@ catch only `BadSignatureError` around `verify_key.verify`.
 accepts an `artifact_name` passed from the agent manifest and
 persists it verbatim without any basename or character filtering.
 If a downstream storage backend constructs a filesystem path from
-that name (current MongoDB storage does not, but any file-based or
+that name (current Postgres storage does not, but any file-based or
 S3-prefixed backend would), an agent that returns
 `artifact_name="../../etc/passwd"` writes outside the expected
 directory. Defensive sanitization is cheap and the surface is
@@ -921,24 +1029,26 @@ returns the DID document extension output with
 `JSONResponse(content=did_document)`, bypassing the pydantic
 `by_alias=True` serialization used everywhere else. For W3C DID
 documents the key names are already the expected form, so this is
-usually harmless. But any Bindu-specific extension fields mixed into
-the document leak out as snake_case, inconsistent with the rest of
-the API. If the DID document is ever consumed by strict A2A
-tooling, the inconsistency becomes a real compatibility bug.
-**Workaround:** Confirm any DID extension fields use camelCase keys
-at the source. Fix is to route the response through a pydantic
-RootModel with the standard camelCase alias generator, or to assert
-on the key shape before returning.
+usually harmless. But any Bindu-specific extension fields mixed
+into the document leak out as snake_case, inconsistent with the
+rest of the API. If the DID document is ever consumed by strict
+A2A tooling, the inconsistency becomes a real compatibility bug.
+**Workaround:** Confirm any DID extension fields use camelCase
+keys at the source. Fix is to route the response through a
+pydantic RootModel with the standard camelCase alias generator, or
+to assert on the key shape before returning.
 **Tracking:** _(no issue yet)_
 
 ---
 
 ## SDKs (TypeScript)
 
-_No entries yet. Add them when the TS SDK's review pass lands._
+_No entries yet. Add them when the TS SDK's review pass lands. New
+postmortems for fixed SDK bugs go in [`bugs/sdk/`](./sdk/)._
 
 ---
 
 ## Frontend
 
-_No entries yet._
+_No entries yet. New postmortems for fixed frontend bugs go in
+[`bugs/frontend/`](./frontend/)._

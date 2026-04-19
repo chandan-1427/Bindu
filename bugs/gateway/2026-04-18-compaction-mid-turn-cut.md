@@ -81,7 +81,7 @@ return { head: history.slice(0, cut), tail: history.slice(cut) }
 `keepTail` is now a MINIMUM, not an exact count. Tail may be longer
 than requested — never shorter.
 
-See commit [77603da](../commit/77603da) and five regression cases in
+See commit [77603da](../../commit/77603da) and five regression cases in
 `gateway/tests/session/compaction-split.test.ts` covering tool-heavy
 turns, single-unbroken-turn histories, and boundary cases.
 
@@ -118,7 +118,7 @@ Candidates for similar bugs in the codebase:
 - `gateway/src/session/index.ts:listMessages` paginates at 1000 rows.
   If a long session's boundary falls mid-turn, and some code path
   uses the truncated list directly with the LLM, same failure mode.
-  Tracked in [`known-issues.md`](./known-issues.md) under
+  Tracked in [`known-issues.md`](../known-issues.md) under
   `list-messages-pagination-silent`.
 - Revert (`gateway/src/session/revert.ts`) cuts by `created_at`
   timestamp. Timestamps generally align with turn starts (user

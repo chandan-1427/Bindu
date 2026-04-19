@@ -84,7 +84,7 @@ mismatch" guess and asserts their ratio stays under 3x. The old
 `includes()` would fail that last test because character-by-character
 compare amplifies the byte-depth difference over thousands of iterations.
 
-See commit [857197a](../commit/857197a).
+See commit [857197a](../../commit/857197a).
 
 ## Why the tests didn't catch it
 
@@ -116,7 +116,7 @@ equal-length bytes (hash if necessary), then use `timingSafeEqual`.
 
 Specific other places to audit:
 
-- **DID signature verification** ([bindu/identity/verify.ts](../gateway/src/bindu/identity/verify.ts)):
+- **DID signature verification** ([bindu/identity/verify.ts](../../gateway/src/bindu/identity/verify.ts)):
   `verify()` delegates to `@noble/ed25519.verifyAsync`, which is
   constant-time by design. Safe.
 - **Bindu `tasks/get` task-id matching** in the polling client: no

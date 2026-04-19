@@ -14,7 +14,7 @@ issue:
 ## Symptom
 
 A developer writing a Python client against Bindu reads
-[`bindu/common/protocol/types.py`](../bindu/common/protocol/types.py)
+[`bindu/common/protocol/types.py`](../../bindu/common/protocol/types.py)
 and sees every TypedDict declared with idiomatic Python attribute
 names:
 
@@ -74,7 +74,7 @@ alias behavior:
   OR the Python attribute name.
 
 Bindu's
-[`types.py`](../bindu/common/protocol/types.py) set the first but
+[`types.py`](../../bindu/common/protocol/types.py) set the first but
 not the second. The default for `populate_by_name` is `False`, which
 means "accept the alias only." The Python attribute names the types
 file declared were unreachable by design — they existed for the
@@ -83,7 +83,7 @@ using them.
 
 Output side was also controlled separately: the server dumps
 responses with `by_alias=True` in
-[`a2a_protocol.py`](../bindu/server/endpoints/a2a_protocol.py), so
+[`a2a_protocol.py`](../../bindu/server/endpoints/a2a_protocol.py), so
 the wire format on responses was correctly camelCase — consistent
 with A2A spec v0.3.0, the TypeScript SDK, the Postman collection,
 and the deployed OpenAPI specs.
@@ -99,7 +99,7 @@ that won.
 ## Fix
 
 Two changes in
-[`bindu/common/protocol/types.py`](../bindu/common/protocol/types.py):
+[`bindu/common/protocol/types.py`](../../bindu/common/protocol/types.py):
 
 1. Introduce a named shared config at the top of the module:
 
@@ -124,7 +124,7 @@ The only observable effect is that a Python client sending
 snake_case now gets accepted instead of rejected.
 
 The fix ships with 9 dedicated tests in
-[`tests/unit/common/test_types_populate_by_name.py`](../tests/unit/common/test_types_populate_by_name.py):
+[`tests/unit/common/test_types_populate_by_name.py`](../../tests/unit/common/test_types_populate_by_name.py):
 
 - Guard that `A2A_MODEL_CONFIG` has both `populate_by_name=True`
   and the alias generator set, so a future accidental drop of the
@@ -157,7 +157,7 @@ caught immediately.
 The new ``test_full_a2a_request_accepts_snake_case`` test drives
 ``a2a_request_ta.validate_json(json.dumps(...))`` with a fully
 snake_case payload — the exact entry point
-[`a2a_protocol.py:129`](../bindu/server/endpoints/a2a_protocol.py)
+[`a2a_protocol.py:129`](../../bindu/server/endpoints/a2a_protocol.py)
 uses. Future regressions on this path will fail in CI instead of
 in a developer's first-ten-minutes experience with the SDK.
 
@@ -183,7 +183,7 @@ Adjacent code to audit with the same question:
 
 - Any gRPC protobuf-to-JSON mapping. Proto files use snake_case by
   convention; JSON mapping defaults to camelCase but is
-  configurable. Check [`proto/agent_handler.proto`](../proto/agent_handler.proto)
+  configurable. Check [`proto/agent_handler.proto`](../../proto/agent_handler.proto)
   and any language SDK that stringifies proto messages for REST
   endpoints — the same "wire format vs. language format" decision
   arises there.
@@ -200,10 +200,10 @@ Adjacent code to audit with the same question:
   are always camelCase." Avoids future developers rediscovering
   this tolerance via trial and error.
 - The DID extension endpoint at
-  [`bindu/server/endpoints/did_endpoints.py`](../bindu/server/endpoints/did_endpoints.py)
+  [`bindu/server/endpoints/did_endpoints.py`](../../bindu/server/endpoints/did_endpoints.py)
   returns the raw DID document dict without routing through a
   pydantic TypeAdapter. For W3C DID docs that's correct (their
   schema uses the W3C spec key names), but any Bindu-internal
   extension fields would leak out as snake_case. Tracked separately
   as `did-document-endpoint-returns-raw-dict` in
-  [`bugs/known-issues.md`](./known-issues.md).
+  [`bugs/known-issues.md`](../known-issues.md).

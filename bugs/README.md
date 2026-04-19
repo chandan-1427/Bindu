@@ -3,22 +3,43 @@
 Two artifacts, one folder:
 
 - [**`known-issues.md`**](./known-issues.md) — user-facing list of
-  CURRENT limitations and known gotchas. Grows and shrinks over time.
-  Entries are REMOVED as the underlying issues get fixed.
+  CURRENT limitations and known gotchas. Opens with a scannable table
+  per subsystem; high-severity entries include a **Scenario** block so
+  you can recognize the bug from the outside before diving into the
+  code. Grows and shrinks over time — entries are REMOVED as the
+  underlying issues get fixed.
 
-- [**`YYYY-MM-DD-*.md`**](./) — dated postmortems for FIXED bugs worth
-  learning from, across the whole repo: Python core, gateway, SDKs,
-  frontend. One file per bug, retained indefinitely.
+- **Dated postmortems** — fixed bugs worth learning from, one file
+  per bug, retained indefinitely. Organized by subsystem:
+  - [`core/`](./core/) — Bindu Core (Python): `bindu/`, `alembic/`,
+    `scripts/`
+  - [`gateway/`](./gateway/) — gateway: `gateway/`
+  - [`sdk/`](./sdk/) — SDKs: `sdks/`
+  - [`frontend/`](./frontend/) — frontend: `frontend/`
 
 Together they answer two different questions:
 
-- *"What should I know before using this system today?"* → `known-issues.md`
-- *"What has broken before, and what did it teach us?"* → dated postmortems
+- *"What should I know before using this system today?"* → [`known-issues.md`](./known-issues.md)
+- *"What has broken before, and what did it teach us?"* → dated postmortems in the subsystem folders
 
 Neither is a replacement for GitHub Issues. Every bug still gets an
 issue for triage and status; this folder is a durable, versioned record
 — the kind of artifact a new maintainer can read six months in to
 understand the codebase's failure modes.
+
+## Folder layout
+
+```
+bugs/
+├── README.md               (this file)
+├── known-issues.md         (current unfixed issues, per-subsystem tables)
+├── core/                   (Bindu Core postmortems)
+│   └── 2026-04-18-*.md
+├── gateway/                (gateway postmortems)
+│   └── 2026-04-18-*.md
+├── sdk/                    (SDK postmortems — none yet)
+└── frontend/               (frontend postmortems — none yet)
+```
 
 ## When to write a postmortem
 
@@ -87,14 +108,43 @@ paths where the same shape could hide.
 
 ## File naming
 
-`YYYY-MM-DD-short-kebab-slug.md`. The date is the day the bug was found
-(not necessarily fixed). The slug is 3–6 lowercase words, kebab-case,
-describing the symptom.
+`bugs/<subsystem>/YYYY-MM-DD-short-kebab-slug.md`. The date is the day
+the bug was found (not necessarily fixed). The slug is 3–6 lowercase
+words, kebab-case, describing the symptom. The subsystem folder
+routes the file to the right audience (core maintainers, gateway
+maintainers, etc.).
 
 Examples:
-- `2026-04-18-sse-cross-contamination.md`
-- `2026-03-15-did-key-rotation-cache-stale.md`
-- `2026-01-07-payment-replay-missing-nonce.md`
+- `bugs/gateway/2026-04-18-sse-cross-contamination.md`
+- `bugs/core/2026-04-18-did-signature-fail-open.md`
+- `bugs/sdk/2026-03-15-did-key-rotation-cache-stale.md`
+
+## Writing `known-issues.md` entries
+
+The file is structured per-subsystem. Each subsystem has:
+
+1. A **Quick index** table — slug / severity / one-liner. Lets
+   readers scan the whole surface in one screen.
+2. Severity sections (High / Medium / Low / Nits) with detail
+   entries underneath.
+
+Style by severity:
+
+- **High** entries use a **Scenario** blockquote at the top — a
+  two-or-three-sentence story showing how the bug looks from
+  outside (what a user does, what they expect, what they get). This
+  is the "story format" that makes hard-to-diagnose bugs
+  recognizable before you open a stack trace. Then a short
+  *What's wrong* paragraph for the technical cause, a *Workaround*,
+  and a *Tracking* line.
+- **Medium / Low / Nits** keep the terse schema: Summary /
+  Workaround / Tracking. These are easy enough to understand from
+  a single paragraph and don't need a narrative.
+
+When you fix an issue: remove its entry from `known-issues.md` and
+(if it taught something) add a dated postmortem in the matching
+subsystem folder. Reference the new postmortem from the
+`Last updated` line so readers can find it.
 
 ## Deletion policy
 

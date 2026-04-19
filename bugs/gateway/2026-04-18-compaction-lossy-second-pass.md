@@ -75,7 +75,7 @@ from `gateway_messages` (compacted) AND gone from the summary column
 - The column overwrite is now safe because the new value is a superset
   of the old one by construction.
 
-See commit [bbb1474](../commit/bbb1474) and tests at
+See commit [bbb1474](../../commit/bbb1474) and tests at
 `gateway/tests/session/summary.test.ts` — three cases covering marker
 injection, closing-prompt variant selection, and whitespace handling.
 
@@ -104,11 +104,11 @@ Other places this shape could hide in the codebase:
 
 - The planner's `agent_catalog` column in `gateway_sessions` is
   wholesale-overwritten on every turn ([`gateway_sessions`
-  schema](../gateway/migrations/001_init.sql)). External may omit an
+  schema](../../gateway/migrations/001_init.sql)). External may omit an
   agent from the catalog on a subsequent turn — we silently drop it
   even though the session's history references its tool calls. Same
   shape: overwrite of a lossy-valid store. Tracked in
-  [`known-issues.md`](./known-issues.md) under `agent-catalog-overwrite`.
+  [`known-issues.md`](../known-issues.md) under `agent-catalog-overwrite`.
 - Any future "session summary" features on top of compaction (e.g.
   per-turn summaries, cross-session rollups) must preserve-on-merge,
   not overwrite.

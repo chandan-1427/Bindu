@@ -53,7 +53,7 @@ tenancy-aware.
 - Emit the `session` frame first (previously last) so clients correlate
   subsequent frames from the start.
 
-See commit [484b6b8](../commit/484b6b8) and the regression test at
+See commit [484b6b8](../../commit/484b6b8) and the regression test at
 `gateway/tests/api/plan-route-filter.test.ts` — two concurrent subscribers
 with different session IDs; each must see only its own deltas.
 
