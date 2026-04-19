@@ -23,6 +23,14 @@ import {
   loadLocalIdentity,
   type LocalIdentity,
 } from "./bindu/identity/local"
+import {
+  deriveClientSecret,
+  ensureHydraClient,
+} from "./bindu/identity/hydra-admin"
+import {
+  createTokenProvider,
+  type TokenProvider,
+} from "./bindu/identity/hydra-token"
 
 /**
  * Bindu Gateway boot.
@@ -43,7 +51,10 @@ import {
 // BinduClient layer. Peers configured with auth.type=did_signed use
 // this identity's private key to sign outbound bodies.
 
-function buildAppLayer(identity: LocalIdentity | undefined) {
+function buildAppLayer(
+  identity: LocalIdentity | undefined,
+  tokenProvider: TokenProvider | undefined,
+) {
   // Level 1 — zero-dependency services
   const level1 = Layer.mergeAll(
     Config.layer,
@@ -51,7 +62,7 @@ function buildAppLayer(identity: LocalIdentity | undefined) {
     Auth.layer,
     Permission.layer,
     ToolRegistry.layer,
-    BinduClient.makeLayer(identity),
+    BinduClient.makeLayer(identity, tokenProvider),
     Skill.defaultLayer,
   )
 
@@ -80,10 +91,10 @@ function buildAppLayer(identity: LocalIdentity | undefined) {
 
 /**
  * Default export kept for backward compat — a layer built without
- * a DID identity. did_signed peers will fail at call time with a
- * clear error pointing at BINDU_GATEWAY_DID_SEED.
+ * a DID identity or token provider. did_signed peers will fail at
+ * call time with a clear error pointing at BINDU_GATEWAY_DID_SEED.
  */
-export const appLayer = buildAppLayer(undefined)
+export const appLayer = buildAppLayer(undefined, undefined)
 
 /**
  * Load the gateway's DID identity from environment if all required
@@ -119,16 +130,85 @@ export function tryLoadIdentity(): LocalIdentity | undefined {
   return loadLocalIdentity({ author, name })
 }
 
+const DEFAULT_SCOPES = ["openid", "offline", "agent:read", "agent:write"]
+
+/**
+ * Auto-register the gateway with Hydra (if configured) and spin
+ * up a TokenProvider for outbound did_signed peer calls.
+ *
+ * Contract:
+ *
+ *   * Requires ``identity`` (the gateway's DID) — returns undefined
+ *     if no identity was loaded, since there's nothing to register.
+ *   * Reads three optional env vars:
+ *
+ *       BINDU_GATEWAY_HYDRA_ADMIN_URL   (e.g. http://hydra:4445)
+ *       BINDU_GATEWAY_HYDRA_TOKEN_URL   (e.g. http://hydra:4444/oauth2/token)
+ *       BINDU_GATEWAY_HYDRA_SCOPE       (space-separated; default:
+ *                                        "openid offline agent:read agent:write")
+ *
+ *   * If BOTH URLs are set: registers with Hydra (idempotent) and
+ *     returns a TokenProvider.
+ *   * If NEITHER is set: returns undefined. did_signed peers must
+ *     then carry a tokenEnvVar or fail at call time.
+ *   * If only one is set: throws a clear error. Partial config is
+ *     the worst of all worlds.
+ *
+ * Blocks boot until registration completes — if the admin API is
+ * unreachable at boot, we want to fail fast rather than discover
+ * the problem on the first peer call.
+ */
+export async function setupHydraIntegration(
+  identity: LocalIdentity,
+): Promise<TokenProvider | undefined> {
+  const adminUrl = process.env.BINDU_GATEWAY_HYDRA_ADMIN_URL
+  const tokenUrl = process.env.BINDU_GATEWAY_HYDRA_TOKEN_URL
+  const scopeStr = process.env.BINDU_GATEWAY_HYDRA_SCOPE
+
+  if (!adminUrl && !tokenUrl) return undefined
+
+  if (!adminUrl || !tokenUrl) {
+    throw new Error(
+      "Partial Hydra config — set both or neither: " +
+        "BINDU_GATEWAY_HYDRA_ADMIN_URL, BINDU_GATEWAY_HYDRA_TOKEN_URL. " +
+        `Got: admin=${adminUrl ? "set" : "missing"}, token=${tokenUrl ? "set" : "missing"}`,
+    )
+  }
+
+  const scope = scopeStr ? scopeStr.split(/\s+/).filter(Boolean) : DEFAULT_SCOPES
+
+  // Re-derive the seed here (not pulled from identity for security —
+  // identity doesn't expose raw seed bytes). Safe because the env
+  // var was already loaded by loadLocalIdentity.
+  const seedB64 = process.env.BINDU_GATEWAY_DID_SEED!
+  const seed = new Uint8Array(Buffer.from(seedB64, "base64"))
+  const clientSecret = deriveClientSecret(seed)
+
+  console.log(`[bindu-gateway] registering with Hydra at ${adminUrl}...`)
+  await ensureHydraClient({
+    adminUrl,
+    did: identity.did,
+    clientName: process.env.BINDU_GATEWAY_NAME ?? "gateway",
+    publicKeyBase58: identity.publicKeyBase58,
+    clientSecret,
+    scope,
+  })
+  console.log(`[bindu-gateway] Hydra registration confirmed for ${identity.did}`)
+
+  return createTokenProvider({
+    tokenUrl,
+    clientId: identity.did,
+    clientSecret,
+    scope,
+  })
+}
+
 export async function main(): Promise<{ close: () => Promise<void> }> {
   const identity = tryLoadIdentity()
   if (identity) {
     console.log(`[bindu-gateway] DID identity loaded: ${identity.did}`)
     console.log(
       `[bindu-gateway] public key (base58): ${identity.publicKeyBase58}`,
-    )
-    console.log(
-      `[bindu-gateway] register this DID + public key with each peer's Hydra ` +
-        `before talking to auth.type=did_signed peers.`,
     )
   } else {
     console.log(
@@ -137,7 +217,18 @@ export async function main(): Promise<{ close: () => Promise<void> }> {
     )
   }
 
-  const runtime = ManagedRuntime.make(buildAppLayer(identity))
+  const tokenProvider = identity
+    ? await setupHydraIntegration(identity)
+    : undefined
+  if (identity && !tokenProvider) {
+    console.log(
+      `[bindu-gateway] Hydra integration not configured — did_signed peers ` +
+        `must each set tokenEnvVar. Set BINDU_GATEWAY_HYDRA_ADMIN_URL + ` +
+        `_TOKEN_URL to auto-register and auto-acquire tokens.`,
+    )
+  }
+
+  const runtime = ManagedRuntime.make(buildAppLayer(identity, tokenProvider))
 
   const cfg = await runtime.runPromise(
     Effect.gen(function* () {
