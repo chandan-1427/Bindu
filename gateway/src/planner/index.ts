@@ -36,10 +36,25 @@ import type { SessionID } from "../session/schema"
 // Plan request shape (matches PLAN.md §API)
 // --------------------------------------------------------------------
 
+// External /plan API — agent auth descriptor.
+//
+// Must stay in sync with ``PeerAuth`` in ``src/bindu/auth/resolver.ts``.
+// They're two schemas for the same concept: PeerAuthRequest validates
+// the incoming /plan request, PeerAuth is the internal shape the peer
+// resolver understands. Drift between them causes silent acceptance of
+// auth types the transport can't actually execute (or, as happened
+// before this comment, the reverse: /plan rejects auth types the
+// transport fully supports).
 export const PeerAuthRequest = z.discriminatedUnion("type", [
   z.object({ type: z.literal("none") }),
   z.object({ type: z.literal("bearer"), token: z.string() }),
   z.object({ type: z.literal("bearer_env"), envVar: z.string() }),
+  z.object({
+    type: z.literal("did_signed"),
+    // Optional — see PeerAuth in resolver.ts for the full semantics.
+    // Omit to use the gateway's auto-acquired Hydra token.
+    tokenEnvVar: z.string().optional(),
+  }),
 ])
 
 export const SkillRequest = z.object({
@@ -65,12 +80,20 @@ export const AgentRequest = z.object({
 })
 export type AgentRequest = z.infer<typeof AgentRequest>
 
+// Preferences on /plan — keys match the documented external API shape
+// in gateway/plans/PLAN.md: snake_case. An earlier draft declared them
+// camelCase (``responseFormat``/``maxHops``/``timeoutMs``/``maxSteps``);
+// clients sending docs-compliant ``max_steps`` landed on undefined
+// silently via ``.passthrough()``, dropping the cap and falling back
+// to ``plannerAgent.steps``. Aligning the schema with the docs fixes
+// the silent discard. ``.passthrough()`` stays so forward-compat
+// extra keys don't break old clients.
 export const PlanPreferences = z
   .object({
-    responseFormat: z.string().optional(),
-    maxHops: z.number().int().positive().optional(),
-    timeoutMs: z.number().int().positive().optional(),
-    maxSteps: z.number().int().positive().optional(),
+    response_format: z.string().optional(),
+    max_hops: z.number().int().positive().optional(),
+    timeout_ms: z.number().int().positive().optional(),
+    max_steps: z.number().int().positive().optional(),
   })
   .partial()
   .passthrough()
@@ -216,7 +239,7 @@ export const layer = Layer.effect(
           ],
           tools,
           modelOverride: plannerAgent.model,
-          stepsOverride: request.preferences?.maxSteps ?? plannerAgent.steps,
+          stepsOverride: request.preferences?.max_steps ?? plannerAgent.steps,
           abort: opts?.abort,
         })
 
