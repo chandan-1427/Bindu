@@ -1,5 +1,6 @@
 import { buildAuthHeaders, type PeerAuth } from "../auth/resolver"
 import type { LocalIdentity } from "../identity/local"
+import type { TokenProvider } from "../identity/hydra-token"
 import { BinduError, JsonRpcResponse, type JsonRpcRequest } from "../protocol/jsonrpc"
 
 /**
@@ -36,6 +37,11 @@ export interface RpcInput {
    *  — the signer needs it to sign the body. Safe to omit for other
    *  auth types. */
   identity?: LocalIdentity
+  /** Gateway's Hydra token provider. Used by ``auth.type === "did_signed"``
+   *  peers that omit ``tokenEnvVar`` — they fall back to this
+   *  provider (auto-acquired at boot). Safe to omit; only relevant
+   *  when the gateway has a configured Hydra. */
+  tokenProvider?: TokenProvider
   /** Extra headers that don't depend on the body (e.g. tracing
    *  propagation). Merged after auth headers so auth can't be
    *  overridden accidentally. */
@@ -76,7 +82,12 @@ export async function rpc<T = unknown>(input: RpcInput): Promise<RpcOutcome<T>> 
   const bodyStr = JSON.stringify(input.request)
 
   try {
-    const authHdrs = await buildAuthHeaders(input.auth, bodyStr, input.identity)
+    const authHdrs = await buildAuthHeaders(
+      input.auth,
+      bodyStr,
+      input.identity,
+      input.tokenProvider,
+    )
     const resp = await fetcher(url, {
       method: "POST",
       headers: {

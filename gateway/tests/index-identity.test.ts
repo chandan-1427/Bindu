@@ -8,7 +8,8 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest"
-import { tryLoadIdentity } from "../src/index"
+import { setupHydraIntegration, tryLoadIdentity } from "../src/index"
+import { loadLocalIdentity } from "../src/bindu/identity/local"
 
 const SEED_VAR = "BINDU_GATEWAY_DID_SEED"
 const AUTHOR_VAR = "BINDU_GATEWAY_AUTHOR"
@@ -56,5 +57,57 @@ describe("tryLoadIdentity", () => {
     process.env[AUTHOR_VAR] = "ops@example.com"
     process.env[NAME_VAR] = "gateway"
     expect(() => tryLoadIdentity()).toThrow(/32 bytes/)
+  })
+})
+
+// -----------------------------------------------------------------------
+// setupHydraIntegration — partial-config fail-fast
+// -----------------------------------------------------------------------
+
+const ADMIN_VAR = "BINDU_GATEWAY_HYDRA_ADMIN_URL"
+const TOKEN_VAR = "BINDU_GATEWAY_HYDRA_TOKEN_URL"
+const SCOPE_VAR = "BINDU_GATEWAY_HYDRA_SCOPE"
+
+function clearHydraEnv() {
+  delete process.env[ADMIN_VAR]
+  delete process.env[TOKEN_VAR]
+  delete process.env[SCOPE_VAR]
+}
+
+describe("setupHydraIntegration", () => {
+  afterEach(() => {
+    clearIdentityEnv()
+    clearHydraEnv()
+  })
+
+  function mkIdentity() {
+    process.env[SEED_VAR] = Buffer.from(new Uint8Array(32)).toString("base64")
+    process.env[AUTHOR_VAR] = "ops@example.com"
+    process.env[NAME_VAR] = "gateway"
+    return loadLocalIdentity({ author: "ops@example.com", name: "gateway" })
+  }
+
+  it("returns undefined when no Hydra env vars are set", async () => {
+    clearHydraEnv()
+    const identity = mkIdentity()
+    expect(await setupHydraIntegration(identity)).toBeUndefined()
+  })
+
+  it("throws on partial config — admin set without token", async () => {
+    clearHydraEnv()
+    process.env[ADMIN_VAR] = "http://hydra:4445"
+    const identity = mkIdentity()
+    await expect(setupHydraIntegration(identity)).rejects.toThrow(
+      /Partial Hydra config/,
+    )
+  })
+
+  it("throws on partial config — token set without admin", async () => {
+    clearHydraEnv()
+    process.env[TOKEN_VAR] = "http://hydra:4444/oauth2/token"
+    const identity = mkIdentity()
+    await expect(setupHydraIntegration(identity)).rejects.toThrow(
+      /Partial Hydra config/,
+    )
   })
 })

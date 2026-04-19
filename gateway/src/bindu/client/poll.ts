@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto"
 import type { PeerAuth } from "../auth/resolver"
 import type { LocalIdentity } from "../identity/local"
+import type { TokenProvider } from "../identity/hydra-token"
 import { Task, isTerminal, needsCallerAction, type Message } from "../protocol/types"
 import { Normalize } from "../protocol"
 import { BinduError, ErrorCode, SCHEMA_MISMATCH_CODES } from "../protocol/jsonrpc"
@@ -32,6 +33,9 @@ export interface SendAndPollInput {
   auth?: PeerAuth
   /** Gateway identity — required iff ``auth.type === "did_signed"``. */
   identity?: LocalIdentity
+  /** Gateway token provider — used by did_signed peers that omit
+   *  ``tokenEnvVar``. */
+  tokenProvider?: TokenProvider
   /** Extra static headers (tracing, etc.) merged on top of auth. */
   extraHeaders?: Record<string, string>
   message: Message
@@ -62,6 +66,7 @@ export async function sendAndPoll(input: SendAndPollInput): Promise<SendAndPollO
     peerUrl: input.peerUrl,
     auth: input.auth,
     identity: input.identity,
+    tokenProvider: input.tokenProvider,
     extraHeaders: input.extraHeaders,
     signal: input.signal,
     timeoutMs: input.timeoutMs,

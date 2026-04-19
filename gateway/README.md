@@ -171,37 +171,85 @@ See [`plans/PLAN.md`](./plans/PLAN.md) §Architecture for the full picture.
 
 The gateway can sign outbound A2A requests with an Ed25519 identity so DID-enforcing Bindu peers accept them. Needed for any peer you configure with `auth.type = "did_signed"`; ignored otherwise.
 
-To enable, set all three env vars:
+### Two modes
+
+| Mode | When to use | Setup |
+|---|---|---|
+| **Auto** (recommended) | Single Hydra shared by the gateway and its peers | Set identity + Hydra URL env vars; gateway self-registers and auto-acquires tokens |
+| **Manual** (federated) | Peers use different Hydras | Set identity env vars; pre-register manually with each peer's Hydra; stash per-peer tokens in env vars |
+
+### Auto mode setup
 
 ```bash
-# Generate a seed once and treat it as a secret:
+# Identity (same for both modes)
 export BINDU_GATEWAY_DID_SEED="$(python -c 'import os,base64;print(base64.b64encode(os.urandom(32)).decode())')"
 export BINDU_GATEWAY_AUTHOR=ops@example.com
 export BINDU_GATEWAY_NAME=gateway
+
+# Hydra auto-registration
+export BINDU_GATEWAY_HYDRA_ADMIN_URL=http://hydra:4445
+export BINDU_GATEWAY_HYDRA_TOKEN_URL=http://hydra:4444/oauth2/token
+# export BINDU_GATEWAY_HYDRA_SCOPE="openid offline agent:read agent:write"  # optional
 ```
 
-On boot the gateway logs its derived DID and public key. Register both with each peer's Hydra (as the gateway's OAuth client), obtain an access token, and point the peer config at the token env var:
+On boot the gateway:
+
+1. Derives its DID and public key from the seed. Logs both.
+2. Registers itself with Hydra as an OAuth client (`client_id` = the DID, `metadata.public_key` = the base58 public key). Idempotent — safe to restart.
+3. Acquires an access token via `client_credentials`. In-memory cache + proactive refresh 30s before expiry.
+
+Peer config for auto mode:
 
 ```json
-{
-  "peers": [
-    {
-      "url": "http://agent:3773",
-      "auth": { "type": "did_signed", "tokenEnvVar": "AGENT_HYDRA_TOKEN" }
-    }
-  ]
-}
+{ "url": "http://agent:3773", "auth": { "type": "did_signed" } }
 ```
 
-The gateway will then:
+No `tokenEnvVar` needed — the gateway pulls the token from its cached Hydra provider.
 
-1. Serialize each JSON-RPC request body once.
-2. Sign those exact bytes with its private key (matching Python's `json.dumps(payload, sort_keys=True)` byte-for-byte — see `src/bindu/identity/local.ts`).
+### Manual mode setup (federated)
+
+Each peer uses its own Hydra. The gateway holds a token per peer, supplied via env vars:
+
+```bash
+# Identity only — no Hydra auto vars
+export BINDU_GATEWAY_DID_SEED="..."
+export BINDU_GATEWAY_AUTHOR=ops@example.com
+export BINDU_GATEWAY_NAME=gateway
+
+# One token per peer
+export RESEARCH_HYDRA_TOKEN="$(hydra token client ...)"
+export SUPPORT_HYDRA_TOKEN="$(hydra token client ...)"
+```
+
+Peer config:
+
+```json
+{ "url": "http://research:3773", "auth": { "type": "did_signed", "tokenEnvVar": "RESEARCH_HYDRA_TOKEN" } },
+{ "url": "http://support:3773",  "auth": { "type": "did_signed", "tokenEnvVar": "SUPPORT_HYDRA_TOKEN" } }
+```
+
+Mix-and-match is fine too: a peer with `tokenEnvVar` set uses that env var even when the auto provider is also configured (peer-scoped wins).
+
+### What happens on the wire
+
+For every outbound call to a `did_signed` peer:
+
+1. Serialize the JSON-RPC request body once.
+2. Sign those exact bytes with the gateway's private key. Matches Python's `json.dumps(payload, sort_keys=True)` byte-for-byte — see `src/bindu/identity/local.ts`.
 3. Send `Authorization: Bearer <token>` + `X-DID`, `X-DID-Signature`, `X-DID-Timestamp` headers on the same request.
 
-If the seed env var is set but malformed, or only some of the three identity vars are set, the gateway refuses to boot with a clear error. Better to fail fast at startup than three layers deep in a peer call.
+### Failure modes — all fail fast with clear errors
 
-Peers configured with `none` / `bearer` / `bearer_env` continue to work without identity. Leave the three env vars unset if no peer needs DID signing.
+| Scenario | When | Error |
+|---|---|---|
+| Seed malformed | Boot | `BINDU_GATEWAY_DID_SEED must decode to exactly 32 bytes` |
+| Partial identity config | Boot | `Partial DID identity config — set all three or none` |
+| Partial Hydra config (admin without token or vice versa) | Boot | `Partial Hydra config — set both or neither` |
+| Hydra admin unreachable | Boot | `Hydra admin GET /admin/clients/... returned 503: ...` |
+| `did_signed` peer but no identity | First call | `did_signed peer requires a gateway LocalIdentity` |
+| `did_signed` peer with no tokenEnvVar and no provider | First call | clear error naming both options |
+
+Peers configured with `none` / `bearer` / `bearer_env` continue to work with or without DID identity. Leave the env vars unset if no peer needs DID signing.
 
 ---
 

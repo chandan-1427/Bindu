@@ -4,6 +4,7 @@ import type { Message, Part, Task } from "../protocol/types"
 import { sendAndPoll, type SendAndPollOutcome } from "./poll"
 import { type PeerAuth } from "../auth/resolver"
 import type { LocalIdentity } from "../identity/local"
+import type { TokenProvider } from "../identity/hydra-token"
 import { BinduError, ErrorCode } from "../protocol/jsonrpc"
 import { verifyArtifact } from "../identity/verify"
 import { createResolver, primaryPublicKeyBase58 } from "../identity/resolve"
@@ -77,20 +78,30 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@bindu/Client") {}
 
 /**
- * Build the Client layer with an optional gateway DID identity.
+ * Build the Client layer with the gateway's DID identity and an
+ * optional Hydra token provider.
  *
- * ``identity`` is what lets the gateway talk to ``did_signed`` peers —
+ * ``identity`` lets the gateway talk to ``did_signed`` peers —
  * every outbound call to such a peer is signed with this identity's
  * private key. For ``bearer`` / ``bearer_env`` / ``none`` peers,
- * identity is ignored and can be omitted (e.g. in tests, or
- * deployments that don't yet talk to any DID-enforcing agents).
+ * identity is ignored.
  *
- * Exported as a factory so ``index.ts`` can load the identity from
- * env at boot and inject it once. The default ``layer`` export below
- * is a no-identity variant for backward compat with existing tests
- * and any deployment that doesn't enable DID signing.
+ * ``tokenProvider`` is the auto path for the OAuth bearer: when a
+ * ``did_signed`` peer omits ``tokenEnvVar``, the gateway calls
+ * ``tokenProvider.getToken()`` to get a fresh-or-cached Hydra
+ * access_token. Safe to omit if all ``did_signed`` peers explicitly
+ * set ``tokenEnvVar`` (the federated pattern), or if the gateway
+ * doesn't talk to any ``did_signed`` peers.
+ *
+ * Exported as a factory so ``index.ts`` can wire the identity and
+ * token provider at boot. The default ``layer`` export below is a
+ * zero-argument variant for backward compat with existing tests and
+ * deployments that don't enable DID signing.
  */
-export const makeLayer = (identity?: LocalIdentity) =>
+export const makeLayer = (
+  identity?: LocalIdentity,
+  tokenProvider?: TokenProvider,
+) =>
   Layer.effect(
     Service,
     Effect.sync(() => {
@@ -98,7 +109,7 @@ export const makeLayer = (identity?: LocalIdentity) =>
 
       const callPeer: Interface["callPeer"] = (input) =>
         Effect.tryPromise({
-          try: () => runCall(input, didResolver, identity),
+          try: () => runCall(input, didResolver, identity, tokenProvider),
           catch: (e) =>
             e instanceof BinduError
               ? e
@@ -111,7 +122,7 @@ export const makeLayer = (identity?: LocalIdentity) =>
 
       const cancel: Interface["cancel"] = ({ peer, taskId }) =>
         Effect.tryPromise({
-          try: () => runCancel(peer, taskId, identity),
+          try: () => runCancel(peer, taskId, identity, tokenProvider),
           catch: (e) =>
             e instanceof BinduError
               ? e
@@ -126,14 +137,16 @@ export const makeLayer = (identity?: LocalIdentity) =>
     }),
   )
 
-/** Default layer — no identity. ``did_signed`` peers will fail at
- *  call time with a clear error pointing at ``makeLayer(identity)``. */
-export const layer = makeLayer(undefined)
+/** Default layer — no identity, no token provider. ``did_signed``
+ *  peers will fail at call time with a clear error pointing at
+ *  ``makeLayer(identity, tokenProvider)``. */
+export const layer = makeLayer(undefined, undefined)
 
 async function runCall(
   input: CallPeerInput,
   didResolver: ReturnType<typeof createResolver>,
   identity: LocalIdentity | undefined,
+  tokenProvider: TokenProvider | undefined,
 ): Promise<CallPeerOutcome> {
   const parts: Part[] =
     typeof input.input === "string" ? [{ kind: "text", text: input.input }] : input.input
@@ -154,6 +167,7 @@ async function runCall(
     peerUrl: input.peer.url,
     auth: input.peer.auth,
     identity,
+    tokenProvider,
     message,
     signal: input.signal,
     timeoutMs: input.timeoutMs,
@@ -212,10 +226,11 @@ async function runCancel(
   peer: PeerDescriptor,
   taskId: string,
   identity: LocalIdentity | undefined,
+  tokenProvider: TokenProvider | undefined,
 ): Promise<void> {
   const { cancel } = await import("./poll")
   await cancel(
-    { peerUrl: peer.url, auth: peer.auth, identity },
+    { peerUrl: peer.url, auth: peer.auth, identity, tokenProvider },
     taskId,
   )
 }

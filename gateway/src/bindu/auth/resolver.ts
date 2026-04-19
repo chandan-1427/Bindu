@@ -1,5 +1,6 @@
 import { z } from "zod"
 import type { LocalIdentity } from "../identity/local"
+import type { TokenProvider } from "../identity/hydra-token"
 
 /**
  * Per-peer auth configuration — describes how to authenticate against a
@@ -26,11 +27,15 @@ export const PeerAuth = z.discriminatedUnion("type", [
   z.object({ type: z.literal("bearer_env"), envVar: z.string() }),
   z.object({
     type: z.literal("did_signed"),
-    /** Env var name holding the OAuth bearer token the peer's Hydra
-     *  issued to the gateway's DID client_id. Bundled with the DID
-     *  signature so the peer satisfies both its OAuth layer and its
-     *  DID layer in one request. */
-    tokenEnvVar: z.string(),
+    /** Optional. When set, the OAuth bearer token is read from this
+     *  process env var. When omitted, the gateway's own Hydra token
+     *  provider is used (auto-acquired via client_credentials at
+     *  boot). ``tokenEnvVar`` is the escape hatch for federated
+     *  deployments where the gateway needs different tokens per
+     *  peer (e.g. each peer runs its own Hydra). The auto path is
+     *  the common case: single shared Hydra, gateway registers
+     *  once, every peer call uses the same cached token. */
+    tokenEnvVar: z.string().optional(),
   }),
 ])
 export type PeerAuth = z.infer<typeof PeerAuth>
@@ -55,6 +60,7 @@ export async function buildAuthHeaders(
   auth: PeerAuth | undefined,
   body: string,
   identity?: LocalIdentity,
+  tokenProvider?: TokenProvider,
 ): Promise<Record<string, string>> {
   if (!auth || auth.type === "none") return {}
   if (auth.type === "bearer") return { Authorization: `Bearer ${auth.token}` }
@@ -75,13 +81,34 @@ export async function buildAuthHeaders(
           "Client layer was built with makeLayer(identity).",
       )
     }
-    const token = process.env[auth.tokenEnvVar]
-    if (!token) {
+
+    // Token resolution:
+    //   1. Peer-specific env var (escape hatch for federated deploys).
+    //   2. Gateway-wide token provider (the auto path from
+    //      BINDU_GATEWAY_HYDRA_TOKEN_URL at boot).
+    //   3. Neither → clear error pointing at both options.
+    let token: string
+    if (auth.tokenEnvVar) {
+      const v = process.env[auth.tokenEnvVar]
+      if (!v) {
+        throw new Error(
+          `auth: env var "${auth.tokenEnvVar}" is not set ` +
+            "(did_signed peer requires an OAuth bearer token alongside the DID signature)",
+        )
+      }
+      token = v
+    } else if (tokenProvider) {
+      token = await tokenProvider.getToken()
+    } else {
       throw new Error(
-        `auth: env var "${auth.tokenEnvVar}" is not set ` +
-          "(did_signed peer requires an OAuth bearer token alongside the DID signature)",
+        "auth: did_signed peer has no tokenEnvVar set and the gateway " +
+          "has no Hydra token provider configured. Set either " +
+          "peer.auth.tokenEnvVar on the peer config, or " +
+          "BINDU_GATEWAY_HYDRA_TOKEN_URL + BINDU_GATEWAY_HYDRA_SCOPE at " +
+          "boot for the auto path.",
       )
     }
+
     const signed = await identity.sign(body)
     return {
       Authorization: `Bearer ${token}`,

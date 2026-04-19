@@ -36,7 +36,12 @@ describe("PeerAuth schema", () => {
   it("rejects unknown variants and missing required fields", () => {
     expect(PeerAuth.safeParse({ type: "unknown" } as any).success).toBe(false)
     expect(PeerAuth.safeParse({ type: "bearer" } as any).success).toBe(false)
-    expect(PeerAuth.safeParse({ type: "did_signed" } as any).success).toBe(false)
+    // did_signed: tokenEnvVar is optional (falls back to gateway
+    // token provider), so `{ type: "did_signed" }` alone is valid.
+    expect(PeerAuth.safeParse({ type: "did_signed" }).success).toBe(true)
+    expect(
+      PeerAuth.safeParse({ type: "did_signed", tokenEnvVar: 42 } as any).success,
+    ).toBe(false)
   })
 })
 
@@ -143,6 +148,78 @@ describe("buildAuthHeaders — did_signed variant", () => {
     expect(h["X-DID"]).toBe(identity.did)
     expect(h["X-DID-Timestamp"]).toMatch(/^\d+$/)
     expect(h["X-DID-Signature"]).toMatch(/^[1-9A-HJ-NP-Za-km-z]+$/) // base58
+  })
+
+  it("falls back to tokenProvider when tokenEnvVar is omitted", async () => {
+    withEnv({ [SEED_ENV]: Buffer.from(new Uint8Array(32)).toString("base64") })
+    const identity = loadLocalIdentity({
+      author: "ops@example.com",
+      name: "gateway",
+      seedEnvVar: SEED_ENV,
+    })
+
+    let providerCalls = 0
+    const fakeProvider = {
+      async getToken() {
+        providerCalls += 1
+        return "auto-acquired-token"
+      },
+    }
+
+    const h = await buildAuthHeaders(
+      { type: "did_signed" /* no tokenEnvVar */ },
+      '{"x":1}',
+      identity,
+      fakeProvider,
+    )
+
+    expect(h.Authorization).toBe("Bearer auto-acquired-token")
+    expect(h["X-DID-Signature"]).toMatch(/^[1-9A-HJ-NP-Za-km-z]+$/)
+    expect(providerCalls).toBe(1)
+  })
+
+  it("tokenEnvVar takes precedence over tokenProvider when both are set", async () => {
+    withEnv({
+      [SEED_ENV]: Buffer.from(new Uint8Array(32)).toString("base64"),
+      [TOKEN_ENV]: "env-token",
+    })
+    const identity = loadLocalIdentity({
+      author: "ops@example.com",
+      name: "gateway",
+      seedEnvVar: SEED_ENV,
+    })
+
+    const fakeProvider = {
+      getToken: async () => "provider-token",
+    }
+
+    const h = await buildAuthHeaders(
+      { type: "did_signed", tokenEnvVar: TOKEN_ENV },
+      '{"x":1}',
+      identity,
+      fakeProvider,
+    )
+
+    // Explicit peer-scoped env var wins over gateway-wide provider.
+    expect(h.Authorization).toBe("Bearer env-token")
+  })
+
+  it("refuses when neither tokenEnvVar nor tokenProvider is available", async () => {
+    withEnv({ [SEED_ENV]: Buffer.from(new Uint8Array(32)).toString("base64") })
+    const identity = loadLocalIdentity({
+      author: "ops@example.com",
+      name: "gateway",
+      seedEnvVar: SEED_ENV,
+    })
+
+    await expect(
+      buildAuthHeaders(
+        { type: "did_signed" /* no tokenEnvVar */ },
+        '{"x":1}',
+        identity,
+        /* tokenProvider */ undefined,
+      ),
+    ).rejects.toThrow(/BINDU_GATEWAY_HYDRA_TOKEN_URL/)
   })
 
   it("signs the exact body string passed in (regression guard)", async () => {
