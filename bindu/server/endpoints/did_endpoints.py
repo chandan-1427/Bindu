@@ -53,7 +53,11 @@ def _normalize_did_document_keys(value: Any) -> Any:
     """
     if isinstance(value, dict):
         return {
-            (k if (not isinstance(k, str) or k.startswith("@") or "_" not in k) else to_camel(k)): _normalize_did_document_keys(v)
+            (
+                k
+                if (not isinstance(k, str) or k.startswith("@") or "_" not in k)
+                else to_camel(k)
+            ): _normalize_did_document_keys(v)
             for k, v in value.items()
         }
     if isinstance(value, list):

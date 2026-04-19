@@ -58,13 +58,16 @@ class TestVerifySignatureHappyPath:
     def test_valid_signature_accepted(self):
         body = b'{"method": "message/send", "id": "1"}'
         h = _sign_headers(body)
-        assert verify_signature(
-            body=body,
-            signature=h["X-DID-Signature"],
-            did=DID,
-            timestamp=int(h["X-DID-Timestamp"]),
-            public_key=_PUBLIC_KEY_B58,
-        ) is True
+        assert (
+            verify_signature(
+                body=body,
+                signature=h["X-DID-Signature"],
+                did=DID,
+                timestamp=int(h["X-DID-Timestamp"]),
+                public_key=_PUBLIC_KEY_B58,
+            )
+            is True
+        )
 
 
 # ---------------------------------------------------------------------------

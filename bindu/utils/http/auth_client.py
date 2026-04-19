@@ -78,9 +78,7 @@ class HybridAuthClient:
         self.access_token = token_response["access_token"]
         logger.info(f"Access token obtained for {self.credentials.client_id}")
 
-    def _create_signed_request_headers(
-        self, body: str | bytes
-    ) -> Dict[str, str]:
+    def _create_signed_request_headers(self, body: str | bytes) -> Dict[str, str]:
         """Create complete headers for signed request with OAuth token.
 
         Args:

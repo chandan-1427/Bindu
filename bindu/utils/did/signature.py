@@ -108,7 +108,7 @@ def sign_request(
 
 
 def verify_signature(
-    body: str | bytes | dict,
+    body: str | bytes,
     signature: str,
     did: str,
     timestamp: int,
@@ -172,9 +172,7 @@ def verify_signature(
         signature_bytes = base58.b58decode(signature)
         verify_key = VerifyKey(public_key_bytes)
     except (ValueError, TypeError) as e:
-        logger.warning(
-            f"DID signature rejected (malformed_input) for {did}: {e}"
-        )
+        logger.warning(f"DID signature rejected (malformed_input) for {did}: {e}")
         return False
 
     # Verify step — BadSignatureError is the *only* exception that means

@@ -57,14 +57,18 @@ class TestCreateSignaturePayload:
         HTTP body."""
         with pytest.raises(TypeError, match="json.dumps"):
             create_signature_payload(
-                {"x": 1}, did="did:bindu:test", timestamp=1000
+                {"x": 1},  # type: ignore[arg-type]
+                did="did:bindu:test",
+                timestamp=1000,
             )
 
     def test_list_input_rejected(self):
         """Any non-str/bytes rejected — not just dict."""
         with pytest.raises(TypeError, match="str or bytes"):
             create_signature_payload(
-                [1, 2, 3], did="did:bindu:test", timestamp=1000  # type: ignore[arg-type]
+                [1, 2, 3],  # type: ignore[arg-type]
+                did="did:bindu:test",
+                timestamp=1000,
             )
 
     def test_timestamp_defaults_to_now_if_none(self):
