@@ -89,50 +89,66 @@ def verify_signature(
         max_age_seconds: Maximum age of request in seconds (default 5 minutes)
 
     Returns:
-        True if signature is valid, False otherwise
+        True if signature is valid, False otherwise.
+
+    The three legitimate "reject" paths each log a distinct reason so
+    operators can tell them apart:
+
+    - Timestamp outside the replay window — ``timestamp_out_of_window``
+    - Malformed base58 input (signature or public key) —
+      ``malformed_input``
+    - Cryptographic mismatch (signature fails verification against the
+      reconstructed payload) — ``crypto_mismatch``
+
+    Any other exception (AttributeError, ImportError, ZeroDivisionError,
+    etc.) is a bug in this function or its callers — it propagates
+    rather than being swallowed as a signature failure. The pre-fix
+    ``except Exception`` made every bug look like "bad signature" and
+    hid real defects in the telemetry.
     """
-    try:
-        # Check timestamp to prevent replay attacks
-        current_time = int(time.time())
-        if abs(current_time - timestamp) > max_age_seconds:
-            logger.warning(
-                f"Request timestamp too old: {timestamp} vs {current_time} "
-                f"(max age: {max_age_seconds}s)"
-            )
-            return False
+    import base58
+    from nacl.exceptions import BadSignatureError
+    from nacl.signing import VerifyKey
 
-        # Reconstruct signature payload
-        payload = create_signature_payload(body, did, timestamp)
-        payload_str = json.dumps(payload, sort_keys=True)
-
-        # Verify signature with public key
-        import base58
-        from nacl.signing import VerifyKey
-        from nacl.exceptions import BadSignatureError
-
-        # Decode the base58-encoded public key and signature
-        try:
-            public_key_bytes = base58.b58decode(public_key)
-            signature_bytes = base58.b58decode(signature)
-
-            # Create verify key from public key bytes
-            verify_key = VerifyKey(public_key_bytes)
-
-            # Verify the signature
-            verify_key.verify(payload_str.encode("utf-8"), signature_bytes)
-            is_valid = True
-        except (BadSignatureError, ValueError, TypeError, Exception) as e:
-            logger.debug(f"Signature verification failed: {e}")
-            is_valid = False
-
-        if not is_valid:
-            logger.warning(f"Invalid DID signature for {did}")
-
-        return is_valid
-
-    except (ImportError, UnicodeEncodeError, ValueError, TypeError) as e:
-        logger.error(f"Failed to verify DID signature: {e}")
+    # Replay guard: reject timestamps outside the allowed window.
+    current_time = int(time.time())
+    if abs(current_time - timestamp) > max_age_seconds:
+        logger.warning(
+            f"DID signature rejected (timestamp_out_of_window) for {did}: "
+            f"{timestamp} vs {current_time} (max age: {max_age_seconds}s)"
+        )
         return False
+
+    # Reconstruct the payload the client claimed to sign. If the body
+    # type is odd enough to raise here, that's a caller contract violation
+    # — let it propagate rather than hiding it as a signature failure.
+    payload = create_signature_payload(body, did, timestamp)
+    payload_str = json.dumps(payload, sort_keys=True)
+
+    # Decode step — malformed base58 is a *caller* error (wrong
+    # encoding), not a bug in this function. Reject with an explicit
+    # reason so logs distinguish "caller sent garbage" from "crypto
+    # math failed." ``VerifyKey(...)`` also raises ValueError for the
+    # wrong-length key case, handled here.
+    try:
+        public_key_bytes = base58.b58decode(public_key)
+        signature_bytes = base58.b58decode(signature)
+        verify_key = VerifyKey(public_key_bytes)
+    except (ValueError, TypeError) as e:
+        logger.warning(
+            f"DID signature rejected (malformed_input) for {did}: {e}"
+        )
+        return False
+
+    # Verify step — BadSignatureError is the *only* exception that means
+    # "the signature didn't match." Anything else propagates.
+    try:
+        verify_key.verify(payload_str.encode("utf-8"), signature_bytes)
+    except BadSignatureError:
+        logger.warning(f"DID signature rejected (crypto_mismatch) for {did}")
+        return False
+
+    return True
 
 
 def extract_signature_headers(headers: dict) -> Optional[Dict[str, Any]]:

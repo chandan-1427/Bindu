@@ -617,7 +617,7 @@ the root cause, and the workaround.
 | Subsystem | High | Medium | Low | Nit |
 |---|---:|---:|---:|---:|
 | Gateway | 3 | 11 | 13 | 4 |
-| Bindu Core (Python) | 4 | 7 | 3 | 0 |
+| Bindu Core (Python) | 4 | 7 | 2 | 0 |
 | SDKs (TypeScript) | — | — | — | — |
 | Frontend | — | — | — | — |
 

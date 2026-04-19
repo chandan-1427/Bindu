@@ -1,6 +1,6 @@
 # Known Issues
 
-_Last updated: 2026-04-19 — restructured into scannable tables and story-format entries for the high-severity items._
+_Last updated: 2026-04-19 — restructured into scannable tables and story-format entries for the high-severity items. `did-signature-overbroad-exception-catch` removed — see [`core/2026-04-19-did-signature-overbroad-exceptions.md`](./core/2026-04-19-did-signature-overbroad-exceptions.md)._
 
 This file is user-facing. It's the first thing a new contributor or
 operator reads to calibrate expectations: what Bindu doesn't do
@@ -42,7 +42,7 @@ Issue referencing the slug (e.g. "Fixes `context-window-hardcoded`").
 | Subsystem | High | Medium | Low | Nit |
 |---|---:|---:|---:|---:|
 | [Gateway](#gateway) | 3 | 11 | 13 | 4 |
-| [Bindu Core (Python)](#bindu-core-python) | 4 | 7 | 3 | 0 |
+| [Bindu Core (Python)](#bindu-core-python) | 4 | 7 | 2 | 0 |
 | [SDKs (TypeScript)](#sdks-typescript) | — | — | — | — |
 | [Frontend](#frontend) | — | — | — | — |
 
@@ -684,7 +684,6 @@ test for it in the same PR.
 | [`task-cancel-check-then-act-race`](#task-cancel-check-then-act-race) | medium | TOCTOU between state check and scheduler cancel |
 | [`no-rate-limit-or-quota-per-caller`](#no-rate-limit-or-quota-per-caller) | medium | No per-caller quota; single caller can exhaust resources |
 | [`context-id-silent-fallback`](#context-id-silent-fallback) | medium | Malformed `context_id` silently creates a new context |
-| [`did-signature-overbroad-exception-catch`](#did-signature-overbroad-exception-catch) | low (hyg) | Bare `except Exception` in `verify_signature` masks bugs |
 | [`artifact-name-not-sanitized`](#artifact-name-not-sanitized) | low (sec) | Agent-supplied artifact names not basenamed |
 | [`did-document-endpoint-returns-raw-dict`](#did-document-endpoint-returns-raw-dict) | low | DID doc endpoint bypasses alias serialization |
 
@@ -982,24 +981,6 @@ The fix is to reject malformed UUIDs with a JSON-RPC error
 **Tracking:** _(no issue yet)_
 
 ### Low
-
-### did-signature-overbroad-exception-catch
-
-**Severity:** low (observability, security hygiene)
-**Summary:** `verify_signature` in
-[`bindu/utils/did/signature.py`](../bindu/utils/did/signature.py)
-catches `(BadSignatureError, ValueError, TypeError, Exception)` and
-returns `is_valid=False` for all of them. The broad tail-`Exception`
-masks real bugs (attribute errors, missing keys, base58 library
-faults) as ordinary signature failures, making incidents hard to
-diagnose and blurring the distinction between "malformed input" and
-"cryptographic fail."
-**Workaround:** Grep server logs for `Signature verification failed:`
-and inspect the exception class to tell bugs from bad signatures.
-Fix is to split decode from verify: catch `ValueError`/`TypeError`
-around base58 decode and return an explicit decode-error reason;
-catch only `BadSignatureError` around `verify_key.verify`.
-**Tracking:** _(no issue yet)_
 
 ### artifact-name-not-sanitized
 
