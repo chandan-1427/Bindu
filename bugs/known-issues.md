@@ -1,6 +1,6 @@
 # Known Issues
 
-_Last updated: 2026-04-19 — restructured into scannable tables and story-format entries for the high-severity items. `did-signature-overbroad-exception-catch` removed — see [`core/2026-04-19-did-signature-overbroad-exceptions.md`](./core/2026-04-19-did-signature-overbroad-exceptions.md)._
+_Last updated: 2026-04-19 — restructured into scannable tables and story-format entries for the high-severity items. `did-document-endpoint-returns-raw-dict` removed — see [`core/2026-04-19-did-document-endpoint-raw-dict.md`](./core/2026-04-19-did-document-endpoint-raw-dict.md)._
 
 This file is user-facing. It's the first thing a new contributor or
 operator reads to calibrate expectations: what Bindu doesn't do
@@ -685,7 +685,6 @@ test for it in the same PR.
 | [`no-rate-limit-or-quota-per-caller`](#no-rate-limit-or-quota-per-caller) | medium | No per-caller quota; single caller can exhaust resources |
 | [`context-id-silent-fallback`](#context-id-silent-fallback) | medium | Malformed `context_id` silently creates a new context |
 | [`artifact-name-not-sanitized`](#artifact-name-not-sanitized) | low (sec) | Agent-supplied artifact names not basenamed |
-| [`did-document-endpoint-returns-raw-dict`](#did-document-endpoint-returns-raw-dict) | low | DID doc endpoint bypasses alias serialization |
 
 ### High
 
@@ -999,25 +998,6 @@ visible.
 should apply `os.path.basename` and an allow-list regex before
 writing. Fix in-core is to sanitize in `from_result`:
 `artifact_name = os.path.basename(artifact_name) or "result"`.
-**Tracking:** _(no issue yet)_
-
-### did-document-endpoint-returns-raw-dict
-
-**Severity:** low (protocol consistency)
-**Summary:**
-[`bindu/server/endpoints/did_endpoints.py`](../bindu/server/endpoints/did_endpoints.py)
-returns the DID document extension output with
-`JSONResponse(content=did_document)`, bypassing the pydantic
-`by_alias=True` serialization used everywhere else. For W3C DID
-documents the key names are already the expected form, so this is
-usually harmless. But any Bindu-specific extension fields mixed
-into the document leak out as snake_case, inconsistent with the
-rest of the API. If the DID document is ever consumed by strict
-A2A tooling, the inconsistency becomes a real compatibility bug.
-**Workaround:** Confirm any DID extension fields use camelCase
-keys at the source. Fix is to route the response through a
-pydantic RootModel with the standard camelCase alias generator, or
-to assert on the key shape before returning.
 **Tracking:** _(no issue yet)_
 
 ---
