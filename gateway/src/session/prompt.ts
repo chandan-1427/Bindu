@@ -18,7 +18,8 @@ import {
   type MessageWithParts,
 } from "./message"
 import { CallID, MessageID, SessionID, newMessageID, newPartID } from "./schema"
-import { tool as aiTool, jsonSchema } from "ai"
+import { jsonSchema } from "ai"
+import { buildSystemPrompt, evtUsage, mapFinishReason, wrapTool } from "./prompt-util"
 // PermissionService imported elsewhere; included via layer graph.
 
 /**
@@ -196,7 +197,7 @@ export const layer = Layer.effect(
             wrapTool(t, input.sessionID, messageID, metadataByCall),
           ),
         )
-        const toolMap: Record<string, ReturnType<typeof aiTool>> = {}
+        const toolMap: Record<string, any> = {}
         for (const [id, ai] of aiTools) toolMap[id] = ai
 
         // 5. Register the tool set for the duration of this call so any
@@ -388,75 +389,3 @@ export const layer = Layer.effect(
   }),
 )
 
-function buildSystemPrompt(
-  agent: AgentInfo,
-  instructions: string[],
-  recipeSummary?: string,
-): string {
-  const parts: string[] = []
-  if (agent.prompt) parts.push(agent.prompt)
-  if (recipeSummary) parts.push(recipeSummary)
-  for (const inst of instructions) parts.push(inst)
-  return parts.join("\n\n").trim()
-}
-
-function mapFinishReason(r: StreamEvent["type"] extends "finish" ? any : any): AssistantMessageInfo["stopReason"] {
-  switch (r) {
-    case "stop":
-      return "stop"
-    case "length":
-      return "length"
-    case "tool-calls":
-      return "tool-calls"
-    case "content-filter":
-      return "content-filter"
-    case "error":
-      return "error"
-    default:
-      return "stop"
-  }
-}
-
-function evtUsage(u: AssistantMessageInfo["tokens"]) {
-  return {
-    inputTokens: u.input,
-    outputTokens: u.output,
-    totalTokens: u.total,
-    cachedInputTokens: u.cache.read,
-  }
-}
-
-function wrapTool(
-  tool: ToolDef,
-  sessionID: SessionID,
-  messageID: MessageID,
-  metadataByCall: Map<string, Record<string, unknown>>,
-): Effect.Effect<[string, any]> {
-  return Effect.sync(() => {
-    const wrapped = aiTool({
-      description: tool.description,
-      inputSchema: tool.parameters as any,
-      execute: async (args: any, opts: { toolCallId: string; abortSignal?: AbortSignal }) => {
-        const ctx: ToolContext = {
-          sessionId: sessionID,
-          messageId: messageID,
-          agent: "planner",
-          callId: opts.toolCallId,
-          abort: opts.abortSignal ?? new AbortController().signal,
-          metadata: () => Effect.void,
-        }
-        const result = await Effect.runPromise(tool.execute(args, ctx))
-        // Stash the metadata for this callID so the tool-result handler
-        // can read signatures (and anything else we propagate later)
-        // out of band — the AI SDK's `aiTool.execute` return value
-        // only accepts a string, not structured data. Cleared once the
-        // prompt() call exits because this map is closure-scoped.
-        if (result.metadata) {
-          metadataByCall.set(opts.toolCallId, result.metadata as Record<string, unknown>)
-        }
-        return result.output
-      },
-    } as any)
-    return [tool.id, wrapped] as [string, any]
-  })
-}
