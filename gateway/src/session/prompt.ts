@@ -74,6 +74,26 @@ export const PromptEvent = {
       output: z.unknown().optional(),
       error: z.string().optional(),
       title: z.string().optional(),
+      /**
+       * Signature-verification outcome for the tool call, when the tool
+       * produced one. The gateway's Bindu client emits this on each
+       * peer call when ``trust.verifyDID`` was enabled for the peer;
+       * every other tool path (the load_recipe tool, local tools) has
+       * nothing to verify and leaves this unset.
+       *
+       * Shape mirrors BinduClient's CallPeerOutcome.signatures. `null`
+       * means verification was skipped (trust.verifyDID not set, no
+       * pinned DID, or DID doc resolution failed).
+       */
+      signatures: z
+        .object({
+          ok: z.boolean(),
+          signed: z.number().int().nonnegative(),
+          verified: z.number().int().nonnegative(),
+          unsigned: z.number().int().nonnegative(),
+        })
+        .nullable()
+        .optional(),
     }),
   ),
   Finished: BusEvent.define(
@@ -160,9 +180,21 @@ export const layer = Layer.effect(
         // 3. Build system prompt
         const systemPrompt = buildSystemPrompt(agentInfo, cfg.instructions, input.recipeSummary)
 
-        // 4. Build AI SDK tools from the registered tools
+        // 4. Build AI SDK tools from the registered tools.
+        //
+        // Per-call metadata pouch — populated inside wrapTool when a
+        // tool's execute() returns ExecuteResult.metadata (today that
+        // carries the peer's DID signature counts; tomorrow whatever
+        // else needs to ride along to the SSE consumer). The
+        // tool-result event handler reads from it by callID and
+        // attaches the relevant fields to the Bus publish so /plan's
+        // SSE stream can surface them.
+        const metadataByCall = new Map<string, Record<string, unknown>>()
+
         const aiTools = yield* Effect.all(
-          (input.tools ?? []).map((t) => wrapTool(t, input.sessionID, messageID)),
+          (input.tools ?? []).map((t) =>
+            wrapTool(t, input.sessionID, messageID, metadataByCall),
+          ),
         )
         const toolMap: Record<string, ReturnType<typeof aiTool>> = {}
         for (const [id, ai] of aiTools) toolMap[id] = ai
@@ -277,6 +309,16 @@ export const layer = Layer.effect(
                       end: Date.now(),
                     },
                   }
+                  // Look up any metadata this tool's execute() stashed
+                  // (wrapTool writes it into metadataByCall). Today the
+                  // only structured field we propagate is `signatures`
+                  // from peer-agent calls; everything else stays
+                  // internal to the task row.
+                  const meta = metadataByCall.get(evt.toolCallId)
+                  const rawSigs = meta?.signatures as
+                    | { ok: boolean; signed: number; verified: number; unsigned: number }
+                    | null
+                    | undefined
                   yield* bus.publish(PromptEvent.ToolCallEnd, {
                     sessionID: input.sessionID,
                     messageID,
@@ -284,6 +326,7 @@ export const layer = Layer.effect(
                     callID: evt.toolCallId,
                     tool: evt.toolName,
                     output: evt.output,
+                    ...(rawSigs !== undefined ? { signatures: rawSigs } : {}),
                   })
                   return
                 }
@@ -383,7 +426,12 @@ function evtUsage(u: AssistantMessageInfo["tokens"]) {
   }
 }
 
-function wrapTool(tool: ToolDef, sessionID: SessionID, messageID: MessageID): Effect.Effect<[string, any]> {
+function wrapTool(
+  tool: ToolDef,
+  sessionID: SessionID,
+  messageID: MessageID,
+  metadataByCall: Map<string, Record<string, unknown>>,
+): Effect.Effect<[string, any]> {
   return Effect.sync(() => {
     const wrapped = aiTool({
       description: tool.description,
@@ -398,6 +446,14 @@ function wrapTool(tool: ToolDef, sessionID: SessionID, messageID: MessageID): Ef
           metadata: () => Effect.void,
         }
         const result = await Effect.runPromise(tool.execute(args, ctx))
+        // Stash the metadata for this callID so the tool-result handler
+        // can read signatures (and anything else we propagate later)
+        // out of band — the AI SDK's `aiTool.execute` return value
+        // only accepts a string, not structured data. Cleared once the
+        // prompt() call exits because this map is closure-scoped.
+        if (result.metadata) {
+          metadataByCall.set(opts.toolCallId, result.metadata as Record<string, unknown>)
+        }
         return result.output
       },
     } as any)

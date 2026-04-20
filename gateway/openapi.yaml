@@ -978,6 +978,18 @@ components:
         title:
           type: string
           description: Short display title, typically `@<agent>/<skill>`.
+        signatures:
+          $ref: "#/components/schemas/PlanSignatures"
+          description: |
+            Signature-verification outcome for this peer call. Present
+            only when the caller set `trust.verifyDID: true` on the
+            agent in the /plan request and the gateway attempted
+            verification. Absent on `load_recipe` / other local tool
+            calls that don't involve a peer. A `null` here means
+            verification was configured but skipped at run time (no
+            pinnedDID, DID doc unreachable, or no usable public key in
+            the doc) — distinct from absence, which means "not even
+            attempted".
 
     SSEEvent_TaskFinished:
       type: object
@@ -998,6 +1010,12 @@ components:
             `auth-required`, `payment-required`) surface as `completed` here
             with the prompt in `task.artifact.content`; the planner decides
             whether to retry or surface to the user.
+        signatures:
+          $ref: "#/components/schemas/PlanSignatures"
+          description: |
+            Same shape as on `task.artifact` — duplicated here so
+            consumers that only subscribe to `task.finished` (e.g. for
+            audit logging) still see the verification outcome.
         error:
           type: string
           description: "Present only when `state: failed`. Human-readable."
@@ -1033,6 +1051,49 @@ components:
       type: object
       description: Empty object. Last frame of every successful plan.
       additionalProperties: false
+
+    PlanSignatures:
+      type: [object, "null"]
+      description: |
+        DID-signature verification outcome for one peer call. Emitted
+        on `task.artifact` and `task.finished` when the caller set
+        `trust.verifyDID: true` on the agent in the /plan request.
+
+        **How to interpret the counts:**
+
+        - `signed > 0 && signed === verified` — every artifact that
+          carried a signature checked out against the pinned DID's
+          public key. Strongest guarantee.
+        - `signed === 0 && unsigned > 0` — artifacts came back but
+          none had signatures. The gateway will still report `ok:true`
+          (nothing to fail), but the `verified="yes"` on the
+          `<remote_content>` envelope is a *vacuous* yes — there was
+          nothing to verify. Check the agent's signing config.
+        - `signed > 0 && signed !== verified` — at least one signature
+          didn't match. `ok:false`. The task will also be marked
+          `failed` and surface an error.
+        - Field is `null` — `verifyDID` was enabled but verification
+          couldn't run: pinnedDID missing, DID doc unreachable, or no
+          usable public key in the doc.
+        - Field absent entirely — verification wasn't attempted (no
+          `verifyDID: true`, or this tool call wasn't a peer call —
+          e.g. `load_recipe`).
+      properties:
+        ok:
+          type: boolean
+          description: True when no signed artifact failed verification. Note — if NO artifacts were signed (signed === 0) this is vacuously true; always cross-reference `signed`.
+        signed:
+          type: integer
+          minimum: 0
+          description: Number of artifacts that carried a signature header.
+        verified:
+          type: integer
+          minimum: 0
+          description: Of the signed artifacts, how many passed verification against the pinned DID's public key.
+        unsigned:
+          type: integer
+          minimum: 0
+          description: Number of artifacts that had no signature attached. Informational — doesn't affect `ok`.
 
     PlanUsage:
       type: object

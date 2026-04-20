@@ -169,6 +169,15 @@ async function handleRequest(
 
     spawnReader(ac.signal, ownEvent(bus.subscribe(PromptEvent.ToolCallEnd)), async (evt) => {
       const agentName = parseAgentFromTool(evt.properties.tool)
+      // Only attach `signatures` when the tool explicitly reported a
+      // verification outcome. A `null` here means the tool ran
+      // verification but skipped (no pinnedDID, or DID doc resolution
+      // failed) — still worth surfacing so operators can tell
+      // "skipped" apart from "not attempted" (the latter is absence).
+      const sigField =
+        evt.properties.signatures !== undefined
+          ? { signatures: evt.properties.signatures }
+          : {}
       await stream.writeSSE({
         event: "task.artifact",
         data: JSON.stringify({
@@ -177,6 +186,7 @@ async function handleRequest(
           agent_did: findPinnedDID(request, agentName),
           content: evt.properties.output,
           title: evt.properties.title,
+          ...sigField,
         }),
       })
       await stream.writeSSE({
@@ -187,6 +197,7 @@ async function handleRequest(
           agent_did: findPinnedDID(request, agentName),
           state: evt.properties.error ? "failed" : "completed",
           ...(evt.properties.error ? { error: evt.properties.error } : {}),
+          ...sigField,
         }),
       })
     })
