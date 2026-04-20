@@ -266,14 +266,27 @@ paths:
                     event: done
                     data: {}
         "400":
-          description: Malformed JSON, missing required fields, or schema validation failure.
+          description: |
+            Malformed JSON, missing required fields, schema validation
+            failure, or a catalog that would produce colliding tool ids
+            (two entries whose `<agent>_<skill>` combination normalizes
+            to the same value — silently swallowed before this guard,
+            which let one peer mask another).
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              example:
-                error: "invalid_request"
-                detail: "question: Required; question must be a non-empty string"
+              examples:
+                missingField:
+                  summary: Schema validation failure
+                  value:
+                    error: "invalid_request"
+                    detail: "question: Required; question must be a non-empty string"
+                collidingToolIds:
+                  summary: Two catalog entries produce the same normalized tool id
+                  value:
+                    error: "invalid_request"
+                    detail: 'agents catalog has colliding tool ids — toolId "call_research_search" produced by: research/search, research/search'
         "401":
           description: Missing or invalid bearer token.
           content:

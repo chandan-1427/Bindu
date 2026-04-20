@@ -111,6 +111,12 @@ describe("recipe loader", () => {
     expect(withoutName.name).toBe("stem")
   })
 
+  it("rejects recipe names that start with 'call_' (reserved for A2A tool ids)", () => {
+    writeFlat("bad", "name: call_research_search\ndescription: visually collides with an A2A tool id")
+
+    expect(() => loadRecipesDir(dir)).toThrow(/call_/)
+  })
+
   it("ignores directories without a RECIPE.md file", () => {
     const sub = resolve(dir, "just-a-dir")
     mkdirSync(sub, { recursive: true })

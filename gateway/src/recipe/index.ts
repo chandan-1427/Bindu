@@ -36,7 +36,19 @@ import type { Info as AgentInfo } from "../agent"
  */
 
 export const Info = z.object({
-  name: z.string().min(1),
+  // The `call_` prefix is reserved for A2A tool ids the planner builds as
+  // `call_<agentName>_<skillId>`. A recipe named `call_research_search`
+  // would render in the `load_recipe` tool description next to an
+  // identically-named A2A tool, and the planner LLM has no way to tell
+  // them apart by sight. Different namespaces technically — recipe names
+  // are parameters of one tool, tool ids are tools — but the visual
+  // collision is what matters. Reject at load time.
+  name: z
+    .string()
+    .min(1)
+    .refine((n) => !n.startsWith("call_"), {
+      message: "recipe name must not start with \"call_\" — that prefix is reserved for A2A tool ids",
+    }),
   description: z.string().min(1),
   tags: z.array(z.string()).default([]),
   triggers: z.array(z.string()).default([]),

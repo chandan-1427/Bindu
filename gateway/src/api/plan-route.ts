@@ -5,6 +5,7 @@ import { streamSSE } from "hono/streaming"
 import {
   PlanRequest,
   Service as PlannerService,
+  findDuplicateToolIds,
   type Interface as PlannerInterface,
   type SessionContext,
 } from "../planner"
@@ -65,6 +66,30 @@ async function handleRequest(
     request = PlanRequest.parse(body)
   } catch (e) {
     return c.json({ error: "invalid_request", detail: (e as Error).message }, 400)
+  }
+
+  // 2a. Reject catalogs that would produce colliding tool ids — silent
+  //     last-write-wins in the AI SDK's toolMap was masking caller bugs
+  //     (two entries with the same agent name + skill id, or underscores
+  //     vs dots in agent names flattening to the same normalized id).
+  //     The caller needs to know; give them a clean 400.
+  const collisions = findDuplicateToolIds(request.agents)
+  if (collisions) {
+    const detail = collisions
+      .map(
+        (c) =>
+          `toolId "${c.toolId}" produced by: ${c.entries
+            .map((e) => `${e.agentName}/${e.skillId}`)
+            .join(", ")}`,
+      )
+      .join("; ")
+    return c.json(
+      {
+        error: "invalid_request",
+        detail: `agents catalog has colliding tool ids — ${detail}`,
+      },
+      400,
+    )
   }
 
   // 3. Resolve session BEFORE opening SSE — required so subscribers can
