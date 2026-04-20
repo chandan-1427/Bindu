@@ -78,6 +78,61 @@ for entry in "${AGENTS[@]}"; do
   start_one "${name}" "${port}" || true
 done
 
+# Poll each agent's /health for up to ~5s and read its DID. We do this
+# in the script (rather than forcing the operator to run a second
+# command) because pinning peer DIDs in /plan requests is the #1 way
+# to get `agent_did` populated in the gateway's SSE stream. Printing
+# ready-to-paste shell exports keeps the common workflow one-step.
+print_dids() {
+  local timeout_ms=5000
+  local label
+  declare -a rows=()
+
+  for entry in "${AGENTS[@]}"; do
+    local name="${entry%:*}"
+    local port="${entry#*:}"
+    local did=""
+    local waited=0
+    while (( waited < timeout_ms )); do
+      did="$(curl -sS --max-time 1 "http://localhost:${port}/health" 2>/dev/null \
+        | python3 -c 'import sys,json
+try:
+    print(json.load(sys.stdin)["application"]["agent_did"])
+except Exception:
+    pass' 2>/dev/null)"
+      if [[ -n "${did}" ]]; then break; fi
+      sleep 0.25
+      waited=$(( waited + 250 ))
+    done
+    if [[ -z "${did}" ]]; then did="(not ready — re-run or check logs/${name}.log)"; fi
+    rows+=("${name}|${port}|${did}")
+  done
+
+  echo
+  echo "Agent DIDs:"
+  for row in "${rows[@]}"; do
+    local n p d
+    IFS='|' read -r n p d <<< "${row}"
+    printf "  %-16s :%s  %s\n" "${n}" "${p}" "${d}"
+  done
+
+  echo
+  echo "Shell exports (paste to pin peer DIDs in /plan requests):"
+  for row in "${rows[@]}"; do
+    local n p d
+    IFS='|' read -r n p d <<< "${row}"
+    if [[ "${d}" == did:* ]]; then
+      # Strip "_agent" suffix so variable names match the conventional
+      # /plan catalog name (e.g. JOKE_DID, not JOKE_AGENT_DID).
+      local var
+      var="$(echo "${n%_agent}" | tr '[:lower:]' '[:upper:]')_DID"
+      printf '  export %s="%s"\n' "${var}" "${d}"
+    fi
+  done
+}
+
+print_dids
+
 echo
 echo "Fleet started. Tail logs with:"
 echo "  tail -f ${LOG_DIR}/*.log"
