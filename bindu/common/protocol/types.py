@@ -1541,14 +1541,14 @@ ClearContextsResponse = JSONRPCResponse[
 ]
 
 SetTaskPushNotificationRequest = JSONRPCRequest[
-    Literal["tasks/pushNotification/set"], TaskPushNotificationConfig
+    Literal["tasks/pushNotificationConfig/set"], TaskPushNotificationConfig
 ]
 SetTaskPushNotificationResponse = JSONRPCResponse[
     TaskPushNotificationConfig, PushNotificationNotSupportedError
 ]
 
 GetTaskPushNotificationRequest = JSONRPCRequest[
-    Literal["tasks/pushNotification/get"], TaskIdParams
+    Literal["tasks/pushNotificationConfig/get"], TaskIdParams
 ]
 GetTaskPushNotificationResponse = JSONRPCResponse[
     TaskPushNotificationConfig, PushNotificationNotSupportedError

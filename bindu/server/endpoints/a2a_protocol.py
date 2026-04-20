@@ -117,7 +117,7 @@ async def agent_run_endpoint(app: BinduApplication, request: Request) -> Respons
         2.1. The task was "completed" successfully.
         2.2. The task was "canceled".
         2.3. The task "failed".
-    3. The server will send a "working" on the first chunk on `tasks/pushNotification/get`.
+    3. The server will send a "working" on the first chunk on `tasks/pushNotificationConfig/get`.
     """
     client_ip = get_client_ip(request)
     request_id = None
