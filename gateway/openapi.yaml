@@ -324,16 +324,45 @@ paths:
       security: []
       responses:
         "200":
-          description: Gateway is up.
+          description: |
+            Gateway is up. Response body describes the process — version,
+            identity, configured planner model, recipe count, uptime. The
+            200 status is informational, not a health gate: read `status`
+            and `ready` in the body to distinguish healthy from degraded.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
               example:
-                ok: true
-                name: "@bindu/gateway"
-                session: "stateful"
-                supabase: true
+                version: "0.1.0"
+                health: "healthy"
+                runtime:
+                  storage_backend: "Supabase"
+                  bus_backend: "EffectPubSub"
+                  planner:
+                    model: "openrouter/anthropic/claude-sonnet-4.6"
+                    provider: "openrouter"
+                    model_id: "anthropic/claude-sonnet-4.6"
+                    temperature: 0.3
+                    top_p: null
+                    max_steps: 10
+                  recipe_count: 2
+                  did_signing_enabled: true
+                  hydra_integrated: true
+                application:
+                  name: "@bindu/gateway"
+                  session_mode: "stateful"
+                  gateway_did: "did:bindu:ops_at_example_com:gateway:f72ba681-f873-324c-6012-23c4d5b72451"
+                  gateway_id: "f72ba681-f873-324c-6012-23c4d5b72451"
+                  author: "ops_at_example_com"
+                system:
+                  node_version: "v22.22.1"
+                  platform: "darwin"
+                  architecture: "arm64"
+                  environment: "development"
+                status: "ok"
+                ready: true
+                uptime_seconds: 2.4
 
   /.well-known/did.json:
     get:
@@ -662,22 +691,142 @@ components:
 
     HealthResponse:
       type: object
-      required: [ok, name, session, supabase]
+      required: [version, health, runtime, application, system, status, ready, uptime_seconds]
+      description: |
+        Detailed gateway health payload. Shape aligned with the per-agent
+        Bindu health (the one a `bindufy()`-built agent returns), adapted
+        for the coordinator role: `gateway_id`/`gateway_did` replace the
+        agent-side `penguin_id`/`agent_did`, and `runtime` reports
+        gateway-specific knobs (planner model, recipe count, DID-signing
+        status) instead of the agent's task-manager fields.
       properties:
-        ok:
+        version:
+          type: string
+          description: Gateway package version, from gateway/package.json.
+          example: "0.1.0"
+        health:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: |
+            Overall classification.
+            - `healthy`: every boot invariant satisfied, planner model resolves.
+            - `degraded`: non-critical subsystem missing (reserved — no current signals trigger this).
+            - `unhealthy`: a required invariant is broken (e.g. no planner model configured).
+        runtime:
+          $ref: "#/components/schemas/HealthRuntime"
+        application:
+          $ref: "#/components/schemas/HealthApplication"
+        system:
+          $ref: "#/components/schemas/HealthSystem"
+        status:
+          type: string
+          enum: [ok, error]
+          description: Two-state mirror of `health` — `ok` when healthy, `error` when unhealthy. Provided for operators that prefer binary.
+        ready:
           type: boolean
-          const: true
-          description: Always true when the endpoint responds.
+          description: Liveness gate. True when every boot invariant is satisfied. Use this for k8s readiness probes via a `jq` post-processor.
+        uptime_seconds:
+          type: number
+          description: Seconds since gateway process boot (float, 2 decimal places).
+          example: 23.3
+
+    HealthRuntime:
+      type: object
+      required: [storage_backend, bus_backend, planner, recipe_count, did_signing_enabled, hydra_integrated]
+      properties:
+        storage_backend:
+          type: string
+          description: Durable session store. Today always `Supabase`.
+        bus_backend:
+          type: string
+          description: Event bus driver. Today always `EffectPubSub` (in-process).
+        planner:
+          $ref: "#/components/schemas/HealthPlanner"
+        recipe_count:
+          type: integer
+          description: Number of recipes discovered at boot (union across all scanned directories, after permission filtering for the default agent).
+          example: 2
+        did_signing_enabled:
+          type: boolean
+          description: True when a gateway DID identity is loaded (env vars `BINDU_GATEWAY_DID_SEED` + friends all set). `did_signed` peers require this.
+        hydra_integrated:
+          type: boolean
+          description: True when a Hydra token provider was successfully wired at boot. `did_signed` peers without `tokenEnvVar` need this to auto-acquire tokens.
+
+    HealthPlanner:
+      type: object
+      required: [model, provider, model_id, temperature, top_p, max_steps]
+      description: |
+        The planner LLM configuration — what model drives the agentic loop
+        inside every `/plan` call. Sourced from `gateway/agents/planner.md`
+        frontmatter (or config.agent.planner overrides).
+      properties:
+        model:
+          type: [string, "null"]
+          description: Full provider-prefixed model id as configured. Null when no planner agent is configured.
+          example: "openrouter/anthropic/claude-sonnet-4.6"
+        provider:
+          type: [string, "null"]
+          description: Provider segment (bit before the first `/`). Today always `openrouter`.
+          example: "openrouter"
+        model_id:
+          type: [string, "null"]
+          description: Upstream model id the provider understands. For OpenRouter-proxied Anthropic this is `anthropic/claude-sonnet-4.6`.
+          example: "anthropic/claude-sonnet-4.6"
+        temperature:
+          type: [number, "null"]
+          description: Sampling temperature configured on the planner agent.
+        top_p:
+          type: [number, "null"]
+          description: Nucleus sampling top_p.
+        max_steps:
+          type: [integer, "null"]
+          description: Cap on agentic loop steps per plan. Null when no cap is set (the planner will run until natural completion or context overflow).
+
+    HealthApplication:
+      type: object
+      required: [name, session_mode, gateway_did, gateway_id, author]
+      properties:
         name:
           type: string
-          example: "@bindu/gateway"
-        session:
+          const: "@bindu/gateway"
+        session_mode:
           type: string
           enum: [stateful, stateless]
-          description: Configured session mode (from `gateway.session.mode`).
-        supabase:
-          type: boolean
-          description: Whether a Supabase URL is configured. Does NOT test connectivity.
+          description: Configured session persistence mode.
+        gateway_did:
+          type: [string, "null"]
+          description: The gateway's full DID, null when no identity is configured.
+          example: "did:bindu:ops_at_example_com:gateway:f72ba681-f873-324c-6012-23c4d5b72451"
+        gateway_id:
+          type: [string, "null"]
+          description: Short identifier — last segment of the DID (UUID-ish hash of the public key for `did:bindu`).
+          example: "f72ba681-f873-324c-6012-23c4d5b72451"
+        author:
+          type: [string, "null"]
+          description: Author segment from the DID. Null for non-Bindu DIDs or when no identity is configured.
+          example: "ops_at_example_com"
+
+    HealthSystem:
+      type: object
+      required: [node_version, platform, architecture, environment]
+      properties:
+        node_version:
+          type: string
+          description: Node.js runtime version.
+          example: "v22.22.1"
+        platform:
+          type: string
+          description: Underlying OS kernel identifier from `process.platform`.
+          example: "darwin"
+        architecture:
+          type: string
+          description: CPU architecture from `process.arch`.
+          example: "arm64"
+        environment:
+          type: string
+          description: Value of `NODE_ENV`, or `"development"` when unset.
+          example: "development"
 
     GatewayDidDocument:
       type: object

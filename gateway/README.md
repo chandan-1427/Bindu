@@ -30,8 +30,47 @@ Apply the two Supabase migrations first (`migrations/001_init.sql`, `migrations/
 Health check:
 
 ```bash
-curl http://localhost:3774/health
-# → {"ok":true,"name":"@bindu/gateway","session":"stateful","supabase":true}
+curl -sS http://localhost:3774/health
+```
+
+Returns a detailed JSON payload describing the gateway process — version, planner model, identity (if configured), recipe count, Node/platform details, and uptime. Matches the shape of the per-agent Bindu health payload with gateway-appropriate fields. See [`openapi.yaml`](./openapi.yaml) §HealthResponse for the full schema; the interesting fields:
+
+```json
+{
+  "version": "0.1.0",
+  "health": "healthy",
+  "runtime": {
+    "storage_backend": "Supabase",
+    "bus_backend": "EffectPubSub",
+    "planner": {
+      "model": "openrouter/anthropic/claude-sonnet-4.6",
+      "provider": "openrouter",
+      "model_id": "anthropic/claude-sonnet-4.6",
+      "temperature": 0.3,
+      "top_p": null,
+      "max_steps": 10
+    },
+    "recipe_count": 2,
+    "did_signing_enabled": true,
+    "hydra_integrated": true
+  },
+  "application": {
+    "name": "@bindu/gateway",
+    "session_mode": "stateful",
+    "gateway_did": "did:bindu:ops_at_example_com:gateway:47191e40-3e91-2ef4-d001-b8d005680279",
+    "gateway_id": "47191e40-3e91-2ef4-d001-b8d005680279",
+    "author": "ops_at_example_com"
+  },
+  "system": {
+    "node_version": "v22.5.0",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "environment": "development"
+  },
+  "status": "ok",
+  "ready": true,
+  "uptime_seconds": 23.3
+}
 ```
 
 For a runnable multi-agent walkthrough, see [`docs/STORY.md`](./docs/STORY.md) §Chapter 2-3.

@@ -19,6 +19,7 @@ import * as BinduClient from "./bindu/client"
 import * as Server from "./server"
 import * as Planner from "./planner"
 import { buildPlanHandler } from "./api/plan-route"
+import { buildHealthHandler } from "./api/health-route"
 import { buildDidHandler } from "./api/did-route"
 import {
   loadLocalIdentity,
@@ -239,6 +240,11 @@ export async function main(): Promise<{ close: () => Promise<void> }> {
   )
 
   const planHandler = await runtime.runPromise(buildPlanHandler)
+  // `hydraIntegrated` surfaces on /health so operators can see at a glance
+  // whether did_signed peers can auto-acquire tokens.
+  const healthHandler = await runtime.runPromise(
+    buildHealthHandler(identity, tokenProvider !== undefined),
+  )
 
   const app: Hono = await runtime.runPromise(
     Effect.gen(function* () {
@@ -247,6 +253,7 @@ export async function main(): Promise<{ close: () => Promise<void> }> {
     }),
   )
 
+  app.get("/health", healthHandler)
   app.post("/plan", planHandler)
 
   // Self-publish the gateway's DID document so A2A peers can resolve
