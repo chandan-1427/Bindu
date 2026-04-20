@@ -1,14 +1,12 @@
+import type { ZodType } from "zod"
+
 /**
  * Minimal YAML frontmatter parser for gateway markdown configs.
  *
- * Used by the agent loader and (Phase 1+) the recipe loader. Extracted into a
- * shared util so the two features can evolve independently — previously the
- * agent module reached into the skill module just to borrow `splitFrontmatter`,
- * and the skill module was scheduled for rename/removal.
+ * Used by the agent loader and the recipe loader. Kept intentionally small —
+ * if authors need richer YAML, pull in `js-yaml` explicitly.
  *
- * Scope: YAML features the gateway's frontmatter blocks actually use. No
- * anchors, no multi-line block scalars, no flow mappings. Keep it small; if
- * authors need richer YAML, pull in `js-yaml` explicitly.
+ * Scope: YAML features the gateway's frontmatter blocks actually use.
  *
  *   - `key: value`
  *   - nested maps (indentation-based)
@@ -55,6 +53,38 @@ export function parseYaml(src: string): Record<string, unknown> {
   }
 
   return out
+}
+
+/** Split frontmatter and parse the YAML block in one call. */
+export function parseFrontmatterDoc(raw: string): {
+  fm: Record<string, unknown>
+  body: string
+} {
+  const { frontmatter, body } = splitFrontmatter(raw)
+  return { fm: frontmatter ? parseYaml(frontmatter) : {}, body }
+}
+
+/**
+ * Parse a markdown doc's frontmatter, build a candidate via `build`, and
+ * validate against `schema`. Consolidates the loader pattern shared by agent
+ * and recipe: both split→parseYaml→buildCandidate→safeParse→throwOnError.
+ */
+export function parseMarkdownWithSchema<T>(args: {
+  path: string
+  raw: string
+  kind: string
+  schema: ZodType<T>
+  build: (fm: Record<string, unknown>, body: string) => unknown
+}): T {
+  const { fm, body } = parseFrontmatterDoc(args.raw)
+  const candidate = args.build(fm, body)
+  const result = args.schema.safeParse(candidate)
+  if (!result.success) {
+    throw new Error(
+      `${args.kind}: invalid frontmatter in ${args.path}: ${result.error.message}`,
+    )
+  }
+  return result.data
 }
 
 export function parseScalar(s: string): unknown {

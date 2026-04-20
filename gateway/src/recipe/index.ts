@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from "fs"
 import { resolve, basename, dirname } from "path"
 import { pathToFileURL } from "url"
 import { z } from "zod"
-import { splitFrontmatter, parseYaml } from "../_shared/util/frontmatter"
+import { parseMarkdownWithSchema } from "../_shared/util/frontmatter"
 import { evaluate as permEvaluate, type Ruleset } from "../permission"
 import type { Info as AgentInfo } from "../agent"
 
@@ -61,23 +61,20 @@ export type Info = z.infer<typeof Info>
 
 /** Parse a single recipe file. `fallbackName` is used if frontmatter omits `name`. */
 export function parseRecipeFile(path: string, raw: string, fallbackName: string): Info {
-  const { frontmatter, body } = splitFrontmatter(raw)
-  const fm = frontmatter ? parseYaml(frontmatter) : {}
-
-  const candidate = {
-    name: (fm.name as string | undefined) ?? fallbackName,
-    description: (fm.description as string | undefined) ?? "",
-    tags: Array.isArray(fm.tags) ? (fm.tags as string[]) : [],
-    triggers: Array.isArray(fm.triggers) ? (fm.triggers as string[]) : [],
-    location: path,
-    content: body.trim(),
-  }
-
-  const result = Info.safeParse(candidate)
-  if (!result.success) {
-    throw new Error(`recipe: invalid frontmatter in ${path}: ${result.error.message}`)
-  }
-  return result.data
+  return parseMarkdownWithSchema({
+    path,
+    raw,
+    kind: "recipe",
+    schema: Info,
+    build: (fm, body) => ({
+      name: (fm.name as string | undefined) ?? fallbackName,
+      description: (fm.description as string | undefined) ?? "",
+      tags: Array.isArray(fm.tags) ? (fm.tags as string[]) : [],
+      triggers: Array.isArray(fm.triggers) ? (fm.triggers as string[]) : [],
+      location: path,
+      content: body.trim(),
+    }),
+  })
 }
 
 /**

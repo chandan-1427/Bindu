@@ -2,8 +2,8 @@ import { Context, Effect, Layer } from "effect"
 import { z } from "zod"
 import { readdirSync, readFileSync, existsSync, statSync } from "fs"
 import { resolve, basename } from "path"
-import { splitFrontmatter, parseYaml } from "../_shared/util/frontmatter"
-import { Ruleset, fromConfig as permFromConfig } from "../permission"
+import { parseMarkdownWithSchema } from "../_shared/util/frontmatter"
+import { fromConfig as permFromConfig } from "../permission"
 import { Service as ConfigService } from "../config"
 
 /**
@@ -65,33 +65,27 @@ export const Info = z.object({
 export type Info = z.infer<typeof Info>
 
 export function parseAgentFile(path: string, raw: string): Info {
-  const { frontmatter, body } = splitFrontmatter(raw)
-  const fm = frontmatter ? parseYaml(frontmatter) : {}
   const nameFromFile = basename(path).replace(/\.md$/i, "")
-
-  // Convert nested permission object to flat Ruleset.
-  const permission: Ruleset = permFromConfig(fm.permission as Record<string, unknown> | undefined)
-
-  const candidate = {
-    name: (fm.name as string | undefined) ?? nameFromFile,
-    description: fm.description as string | undefined,
-    mode: (fm.mode as Info["mode"] | undefined) ?? "primary",
-    model: fm.model as string | undefined,
-    temperature: typeof fm.temperature === "number" ? fm.temperature : undefined,
-    topP: typeof fm.topP === "number" ? fm.topP : undefined,
-    steps: typeof fm.steps === "number" ? fm.steps : undefined,
-    prompt: body.trim() || undefined,
-    permission,
-    bindu: fm.bindu,
-    variant: fm.variant as string | undefined,
-    hidden: fm.hidden as boolean | undefined,
-  }
-
-  const result = Info.safeParse(candidate)
-  if (!result.success) {
-    throw new Error(`agent: invalid frontmatter in ${path}: ${result.error.message}`)
-  }
-  return result.data
+  return parseMarkdownWithSchema({
+    path,
+    raw,
+    kind: "agent",
+    schema: Info,
+    build: (fm, body) => ({
+      name: (fm.name as string | undefined) ?? nameFromFile,
+      description: fm.description as string | undefined,
+      mode: (fm.mode as Info["mode"] | undefined) ?? "primary",
+      model: fm.model as string | undefined,
+      temperature: typeof fm.temperature === "number" ? fm.temperature : undefined,
+      topP: typeof fm.topP === "number" ? fm.topP : undefined,
+      steps: typeof fm.steps === "number" ? fm.steps : undefined,
+      prompt: body.trim() || undefined,
+      permission: permFromConfig(fm.permission as Record<string, unknown> | undefined),
+      bindu: fm.bindu,
+      variant: fm.variant as string | undefined,
+      hidden: fm.hidden as boolean | undefined,
+    }),
+  })
 }
 
 export function loadAgentsDir(dir: string): Info[] {
