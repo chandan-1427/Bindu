@@ -393,7 +393,7 @@ Five agents now, each on its own port:
 | faq_agent | 3778 | Answers from a canned FAQ |
 
 Each is ~60 lines of Python. Open any one — say
-[joke_agent.py](../../examples/gateway_test_fleet/joke_agent.py) — and you'll see
+[joke_agent.py](../examples/gateway_test_fleet/joke_agent.py) — and you'll see
 a small configuration that wires a language model (`openai/gpt-4o-mini`)
 to a few lines of instructions ("tell jokes, refuse other requests").
 Narrow scope on purpose so mistakes are visible.
@@ -660,7 +660,7 @@ Where recipes shine:
   payment-required`, surface the payment URL to the user and STOP — do
   not retry" is a policy the planner wouldn't invent on its own. See the
   seed recipe at
-  [gateway/recipes/payment-required-flow/RECIPE.md](../recipes/payment-required-flow/RECIPE.md)
+  [gateway/recipes/payment-required-flow/RECIPE.md](../gateway/recipes/payment-required-flow/RECIPE.md)
   for a real example.
 - **Tenant-specific rules.** A recipe visible only to a certain agent
   can encode rules like "always include a disclaimer" or "always call
@@ -929,20 +929,20 @@ skip.
 
 ### Reference material
 
-- **[gateway/openapi.yaml](../openapi.yaml)** — the machine-readable
+- **[gateway/openapi.yaml](../gateway/openapi.yaml)** — the machine-readable
   contract for `/plan`, `/health`, and `/.well-known/did.json`. Paste it
   into [Swagger UI](https://editor.swagger.io) or
   [Stoplight](https://stoplight.io) to click through every field,
   response, and example. This is the source of truth; this document is
   the prose.
-- **[gateway/README.md](../README.md)** — the operator's reference:
+- **[gateway/README.md](../gateway/README.md)** — the operator's reference:
   configuration knobs, environment variables, the `/health` payload,
   troubleshooting, and where vendored code came from (OpenCode). Short
   and targeted — most of the narrative moved into this story.
-- **[gateway/agents/planner.md](../agents/planner.md)** — the planner
+- **[gateway/agents/planner.md](../gateway/agents/planner.md)** — the planner
   LLM's system prompt. If the gateway is doing something you don't
   expect, start here.
-- **[gateway/recipes/](../recipes)** — the two seed recipes
+- **[gateway/recipes/](../gateway/recipes)** — the two seed recipes
   (`multi-agent-research`, `payment-required-flow`) plus whatever you
   authored in Chapter 4. Each one is a complete example.
 
@@ -988,7 +988,7 @@ If you're moving this past localhost:
 ### When you're stuck
 
 - Gateway won't boot: re-read the env var section of
-  [gateway/README.md](../README.md). Partial DID or Hydra config fails
+  [gateway/README.md](../gateway/README.md). Partial DID or Hydra config fails
   fast with a message naming the missing var.
 - Planner never calls a tool: the descriptions you gave for
   `agents[].skills[].description` are probably too short or too vague.

@@ -10,7 +10,7 @@ A task-first orchestrator that sits between an **external system** and one or mo
 
 ## New here?
 
-**Read [`docs/STORY.md`](./docs/STORY.md) first.** It's a 45-minute end-to-end walkthrough that goes from a clean clone to running three chained agents, authoring a recipe, and turning on DID signing. Written for readers with no prior AI-agent knowledge.
+**Read [`docs/GATEWAY.md`](../docs/GATEWAY.md) first.** It's a 45-minute end-to-end walkthrough that goes from a clean clone to running three chained agents, authoring a recipe, and turning on DID signing. Written for readers with no prior AI-agent knowledge.
 
 This README is the **operator's reference** — configuration, troubleshooting, and pointers into source. The narrative lives in STORY.md.
 
@@ -73,7 +73,7 @@ Returns a detailed JSON payload describing the gateway process — version, plan
 }
 ```
 
-For a runnable multi-agent walkthrough, see [`docs/STORY.md`](./docs/STORY.md) §Chapter 2-3.
+For a runnable multi-agent walkthrough, see [`docs/GATEWAY.md`](../docs/GATEWAY.md) §Chapter 2-3.
 
 ---
 
@@ -125,7 +125,7 @@ Full request/response contract with examples: [`openapi.yaml`](./openapi.yaml). 
 
 Recipes are markdown playbooks the planner lazy-loads when a task matches. Only metadata (`name` + `description`) sits in the system prompt; the full body is fetched on demand via the `load_recipe` tool. Pattern borrowed from [OpenCode Skills](https://opencode.ai/docs/skills/), renamed to avoid collision with A2A `SkillRequest` (an agent capability on the `/plan` request body).
 
-**Author one in two minutes** — see [`docs/STORY.md`](./docs/STORY.md) §Chapter 4 for the walkthrough. The reference:
+**Author one in two minutes** — see [`docs/GATEWAY.md`](../docs/GATEWAY.md) §Chapter 4 for the walkthrough. The reference:
 
 ### Layouts
 
@@ -175,7 +175,7 @@ Default action is `allow` — an agent with no `recipe:` rules sees everything.
 
 For peers configured with `auth.type = "did_signed"`, the gateway signs each outbound A2A request with an Ed25519 identity. Peers verify against the gateway's public key (published at `/.well-known/did.json`) and reject mismatches.
 
-**Full walkthrough** — [`docs/STORY.md`](./docs/STORY.md) §Chapter 5. The reference:
+**Full walkthrough** — [`docs/GATEWAY.md`](../docs/GATEWAY.md) §Chapter 5. The reference:
 
 ### Two modes
 

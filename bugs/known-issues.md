@@ -1,6 +1,6 @@
 # Known Issues
 
-_Last updated: 2026-04-19 — restructured into scannable tables and story-format entries for the high-severity items. `did-document-endpoint-returns-raw-dict` removed — see [`core/2026-04-19-did-document-endpoint-raw-dict.md`](./core/2026-04-19-did-document-endpoint-raw-dict.md)._
+_Last updated: 2026-04-20 — recipes/SSE/DID work on branch `feat/gateway-recipes` added 15 gateway entries (5 medium, 6 low, 5 nit) and narrowed two existing ones (`tool-name-collisions-silent` → `parse-agent-from-tool-greedy-mismatch`, `signature-verification-ok-when-unsigned` → `signature-verification-non-text-parts-unverified`) to the residual sub-bugs after partial resolutions landed. `did-document-endpoint-returns-raw-dict` removed — see [`core/2026-04-19-did-document-endpoint-raw-dict.md`](./core/2026-04-19-did-document-endpoint-raw-dict.md)._
 
 This file is user-facing. It's the first thing a new contributor or
 operator reads to calibrate expectations: what Bindu doesn't do
@@ -41,7 +41,7 @@ Issue referencing the slug (e.g. "Fixes `context-window-hardcoded`").
 
 | Subsystem | High | Medium | Low | Nit |
 |---|---:|---:|---:|---:|
-| [Gateway](#gateway) | 3 | 11 | 13 | 4 |
+| [Gateway](#gateway) | 3 | 15 | 19 | 9 |
 | [Bindu Core (Python)](#bindu-core-python) | 4 | 7 | 2 | 0 |
 | [SDKs (TypeScript)](#sdks-typescript) | — | — | — | — |
 | [Frontend](#frontend) | — | — | — | — |
@@ -59,9 +59,13 @@ Issue referencing the slug (e.g. "Fixes `context-window-hardcoded`").
 | [`no-session-concurrency-guard`](#no-session-concurrency-guard) | high | Two `/plan` calls on the same session tangle their histories |
 | [`abort-signal-not-propagated-to-bindu-client`](#abort-signal-not-propagated-to-bindu-client) | medium | Client disconnect doesn't cancel in-flight peer polls |
 | [`permission-rules-not-enforced-for-tool-calls`](#permission-rules-not-enforced-for-tool-calls) | medium | Permission service exists but is never called for tool calls |
-| [`tool-name-collisions-silent`](#tool-name-collisions-silent) | medium | `(agent, skill)` pairs can collide; second registration wins |
+| [`parse-agent-from-tool-greedy-mismatch`](#parse-agent-from-tool-greedy-mismatch) | medium | SSE `agent` field wrong when agent names contain underscores |
 | [`agent-catalog-overwrite`](#agent-catalog-overwrite) | medium | Each `/plan` wholesale-overwrites the session's agent catalog |
-| [`signature-verification-ok-when-unsigned`](#signature-verification-ok-when-unsigned) | medium (sec) | Unsigned peer responses indistinguishable from stripped signatures |
+| [`signature-verification-non-text-parts-unverified`](#signature-verification-non-text-parts-unverified) | medium (sec) | `DataPart` / `FilePart` bypass signature verification |
+| [`pinned-did-no-format-validation`](#pinned-did-no-format-validation) | medium | Any string is accepted as `pinnedDID`; no DID shape check |
+| [`recipe-permission-ask-treated-as-allow`](#recipe-permission-ask-treated-as-allow) | medium | `permission: recipe: { "x": "ask" }` silently allows |
+| [`ctx-ask-not-wired-for-recipes`](#ctx-ask-not-wired-for-recipes) | medium | Recipe permission hook is a no-op at runtime |
+| [`supabase-error-surfaces-as-generic-sse-error`](#supabase-error-surfaces-as-generic-sse-error) | medium | Mid-stream DB failures emit untyped `event: error` |
 | [`did-resolver-no-key-id-selection`](#did-resolver-no-key-id-selection) | medium (sec) | Resolver picks the first public key; breaks during rotation |
 | [`list-messages-pagination-silent`](#list-messages-pagination-silent) | medium | Sessions >1000 messages silently truncate oldest |
 | [`tool-input-sent-as-textpart`](#tool-input-sent-as-textpart) | medium | Skills expecting `DataPart` receive `TextPart` with stringified JSON |
@@ -86,10 +90,21 @@ Issue referencing the slug (e.g. "Fixes `context-window-hardcoded`").
 | [`revert-doesnt-cancel-remote-tasks`](#revert-doesnt-cancel-remote-tasks) | low | `revertTo` doesn't cancel still-running peer tasks |
 | [`empty-agents-catalog-no-400`](#empty-agents-catalog-no-400) | low | `/plan` with empty `agents[]` runs and returns an LLM error |
 | [`no-migration-rollback`](#no-migration-rollback) | low | Migrations forward-only — no paired `down.sql` |
+| [`recipe-no-hot-reload`](#recipe-no-hot-reload) | low | Recipe changes require a gateway restart |
+| [`load-recipe-sse-frames-ambiguous`](#load-recipe-sse-frames-ambiguous) | low | `load_recipe` and peer calls use the same SSE `agent` field |
+| [`recipe-file-enumeration-no-truncation-signal`](#recipe-file-enumeration-no-truncation-signal) | low | 10+ files per recipe silently truncated in tool output |
+| [`faq-agent-did-name-mismatch`](#faq-agent-did-name-mismatch) | low | Fleet's `faq_agent.py` registers as `bindu_docs_agent` |
+| [`fleet-env-can-desync-after-seed-rotation`](#fleet-env-can-desync-after-seed-rotation) | low | Stale `$*_DID` env vars survive agent seed rotation |
+| [`provider-openrouter-hardcoded`](#provider-openrouter-hardcoded) | low | `model` field assumes OpenRouter prefix |
 | [`tasks-recorded-is-dead-state`](#tasks-recorded-is-dead-state) | nit | Unused `tasksRecorded` field in the planner |
 | [`map-finish-reason-pointless-ternary`](#map-finish-reason-pointless-ternary) | nit | Conditional type that evaluates to `any` either way |
 | [`db-effect-promise-swallows-errors`](#db-effect-promise-swallows-errors) | nit | `Effect.promise` silently swallows rejected promises |
 | [`test-coverage-gaps`](#test-coverage-gaps) | nit | Backlog list of missing test scenarios |
+| [`accept-header-not-enforced-on-plan`](#accept-header-not-enforced-on-plan) | nit | `Accept: text/event-stream` not required |
+| [`openapi-sse-schemas-unused`](#openapi-sse-schemas-unused) | nit | 13 redocly `no-unused-components` warnings on SSE schemas |
+| [`no-planner-integration-test`](#no-planner-integration-test) | nit | Request → SSE end-to-end test missing |
+| [`no-health-handler-integration-test`](#no-health-handler-integration-test) | nit | `/health` only has pure-helper unit tests |
+| [`story-chapter5-missing-oauth-scope-explanation`](#story-chapter5-missing-oauth-scope-explanation) | nit | DID chapter assumes reader knows OAuth scopes |
 
 ### High
 
@@ -218,23 +233,22 @@ caller sends in the `/plan` request — only include agents the caller
 is allowed to invoke.
 **Tracking:** _(no issue yet)_
 
-### tool-name-collisions-silent
+### parse-agent-from-tool-greedy-mismatch
 
 **Severity:** medium
-**Summary:** `normalizeToolName` in
+**Summary:** The collision half of this bug is now
+**rejected** at plan-open time — `findDuplicateToolIds` in
 [`gateway/src/planner/index.ts`](../gateway/src/planner/index.ts)
-replaces non-alphanumeric characters with `_` and truncates to 80
-chars. Distinct `(agent, skill)` pairs can map to the same tool id:
-e.g. agent `research-v2` + skill `x` and agent `research_v2` + skill
-`x` both become `call_research_v2_x`. The second registration
-silently overwrites the first. A companion bug: `parseAgentFromTool`
-uses a non-greedy regex `^call_(.+?)_(.+)$`, so an agent whose name
-contains an underscore parses as `agent=first-segment`,
-`skill=everything-else` — wrong for the SSE event the handler emits.
-**Workaround:** Use globally-unique agent names in the catalog;
-avoid both hyphens and underscores in the same naming scheme; avoid
-underscores in agent names entirely if you rely on the `task.started`
-SSE agent field being accurate.
+returns a 400 when two `(agent, skill)` pairs normalize to the
+same tool id. What remains: `parseAgentFromTool` in
+[`gateway/src/api/plan-route.ts`](../gateway/src/api/plan-route.ts)
+uses a non-greedy regex `^call_(.+?)_(.+)$`, so an agent whose
+name contains an underscore (e.g. `research_v2`) emits SSE
+`task.started` events with `agent=research`, `skill=v2_x` instead
+of the intended `agent=research_v2`, `skill=x`.
+**Workaround:** Avoid underscores in agent names in the catalog
+you send on `/plan`. If you must, rely on `agent_did` / `task_id`
+for correlation, not the SSE `agent` field.
 **Tracking:** _(no issue yet)_
 
 ### agent-catalog-overwrite
@@ -252,22 +266,21 @@ references its prior tool calls. Also exposed to a concurrency race
 even if individual agents are temporarily unavailable.
 **Tracking:** _(no issue yet)_
 
-### signature-verification-ok-when-unsigned
+### signature-verification-non-text-parts-unverified
 
 **Severity:** medium (security-adjacent)
-**Summary:** `verifyArtifact` in
+**Summary:** The envelope-ambiguity half of this bug is **fixed**
+— `<remote_content verified="...">` is now four-valued
+(`yes | no | unsigned | unknown`), so the planner LLM can tell a
+real cryptographic pass from "nothing was signed". What remains:
+`verifyArtifact` in
 [`gateway/src/bindu/identity/verify.ts`](../gateway/src/bindu/identity/verify.ts)
-returns `{ ok: true, signed: 0 }` when a peer sends text parts with
-no signatures at all. An attacker stripping signatures from a
-compromised peer cannot be distinguished from an unsigned peer. Also,
-`file` and `data` parts are never verified at all regardless of
-signing — a peer that moves payload into a `DataPart` bypasses
-signature checks entirely.
-**Workaround:** For trust-sensitive peers, set `trust.verifyDID:
-true` AND explicitly check `outcome.signatures.signed > 0` in your
-own code before trusting the response. Refuse peers that return
-`data` or `file` parts for responses that must be verified. The
-gateway does not enforce either today.
+only inspects text parts. `file` and `data` parts are never
+verified, so a peer moving payload into a `DataPart` bypasses
+signature checks entirely even when `verifyDID: true` is set.
+**Workaround:** Refuse peers that return `data` or `file` parts
+for responses that must be verified. The gateway does not enforce
+this constraint today.
 **Tracking:** _(no issue yet)_
 
 ### did-resolver-no-key-id-selection
@@ -677,6 +690,246 @@ propagating to the Bindu client; the snake_case flip on
 **Workaround:** None — this is an internal backlog item.
 Contributors tackling any of the fixable items above should add a
 test for it in the same PR.
+**Tracking:** _(no issue yet)_
+
+<!-- ------------------------------------------------------------ -->
+<!-- Added 2026-04-20 from recipes/SSE/DID session work            -->
+<!-- ------------------------------------------------------------ -->
+
+### pinned-did-no-format-validation
+
+**Severity:** medium
+**Summary:** `PeerAuthRequest.trust.pinnedDID` in
+[`gateway/src/planner/index.ts`](../gateway/src/planner/index.ts)
+is `z.string().optional()` with no shape check. A caller can send
+`pinnedDID: "hello"` or accidentally an un-interpolated template
+literal like `"${RESEARCH_DID}"`, and the gateway will echo that
+string in every SSE `agent_did` frame and try (vainly) to resolve
+it for signature verification. Observed in practice when a Postman
+user copy-pasted a bash-style variable reference into the request
+body.
+**Workaround:** Validate DID shape client-side before sending. At
+minimum ensure the string starts with `did:bindu:` or `did:key:`.
+**Tracking:** _(no issue yet)_
+
+### recipe-permission-ask-treated-as-allow
+
+**Severity:** medium
+**Summary:**
+[`Recipe.available`](../gateway/src/recipe/index.ts) filters the
+recipe list shown to an agent by excluding anything whose
+`permission.recipe` resolves to `deny`. The evaluator is
+three-valued (`allow | deny | ask`) — `ask` falls through and the
+recipe is shown AND loadable. With the `ctx.ask` hook unwired (see
+next entry), `"ask"` is silently identical to `"allow"`.
+**Workaround:** Treat `"ask"` as if it were `"allow"` for recipes
+today. If you need to restrict, use `"deny"`.
+**Tracking:** _(no issue yet)_
+
+### ctx-ask-not-wired-for-recipes
+
+**Severity:** medium
+**Summary:** [`tool/recipe.ts`](../gateway/src/tool/recipe.ts)
+calls `ctx.ask({permission: "recipe", target: name})` before
+loading a recipe body, guarded by `if (ctx.ask)`. The `ctx.ask`
+field is marked optional in `ToolContext` and
+[`wrapTool`](../gateway/src/session/prompt.ts) never sets it. So
+the gate is a permanent no-op — recipes load unconditionally
+regardless of agent permission config. This is a separate concern
+from `permission-rules-not-enforced-for-tool-calls` which targets
+the broader tool-call gate.
+**Workaround:** Don't rely on `permission.recipe` in agent configs
+for production access control. Wait for Phase-2 permission UI.
+**Tracking:** _(no issue yet)_
+
+### supabase-error-surfaces-as-generic-sse-error
+
+**Severity:** medium
+**Summary:**
+[`plan-route.ts`](../gateway/src/api/plan-route.ts) wraps
+`runPlan` in a catch that emits `event: error` with only
+`{message: string}`. Callers can't programmatically distinguish a
+Supabase outage from a peer crash from an LLM failure — all three
+look identical on the wire. Operators debugging prod incidents
+have to grep logs.
+**Workaround:** Tail gateway logs out of band. Client-side, treat
+any `event: error` as "retry with exponential backoff" regardless
+of cause.
+**Tracking:** _(no issue yet)_
+
+### recipe-no-hot-reload
+
+**Severity:** low
+**Summary:**
+[`Recipe.layer`](../gateway/src/recipe/index.ts) reads
+`gateway/recipes/` once at boot. Adding, editing, or deleting a
+recipe markdown file has no effect until the gateway process
+restarts. Authoring loop is Ctrl-C + `npm run dev` per change.
+**Workaround:** Script `npm run dev` to auto-restart on
+`recipes/**/*.md` changes using `nodemon` or `tsx watch` with a
+wider include. Or edit + restart; the recipe layer init is cheap.
+**Tracking:** _(no issue yet)_
+
+### load-recipe-sse-frames-ambiguous
+
+**Severity:** low
+**Summary:** When the planner calls the internal `load_recipe`
+tool, the SSE stream emits `task.started` / `task.artifact` /
+`task.finished` frames with `agent: "load_recipe"` and
+`agent_did: null`. Consumers parsing `task.*` frames by peer
+correlation have no crisp way to tell this apart from a peer call
+that happens to have a null DID. The `agent_did_source: null`
+field helps (peer calls from unpinned observed-failed peers also
+have it null) but doesn't cleanly partition.
+**Fix:** add an explicit `tool_kind: "peer" | "local"` field on
+the task.* SSE frames.
+**Workaround:** Filter on `agent === "load_recipe"` client-side.
+**Tracking:** _(no issue yet)_
+
+### recipe-file-enumeration-no-truncation-signal
+
+**Severity:** low
+**Summary:** The
+[`load_recipe`](../gateway/src/tool/recipe.ts) tool returns a
+`<recipe_files>` block listing sibling files inside a bundled
+recipe's directory, capped at 10 entries. If a recipe directory
+has more than 10 files, the excess silently disappears from the
+list — the planner has no way to know it's seeing a sample, not
+the full set.
+**Fix:** include an explicit `truncated: true` marker in the tool
+result's metadata, and emit a `console.warn` at boot when a recipe
+directory exceeds the cap.
+**Workaround:** Keep bundled recipe directories under 10 files.
+**Tracking:** _(no issue yet)_
+
+### faq-agent-did-name-mismatch
+
+**Severity:** low
+**Summary:** The fleet demo's
+[`examples/gateway_test_fleet/faq_agent.py`](../examples/gateway_test_fleet/faq_agent.py)
+registers its DID as `bindu_docs_agent` but the filename and the
+operator-facing port labels (3778) say `faq_agent`. First-time
+readers following `docs/GATEWAY.md` Chapter 3 see the mismatch in
+the SSE `agent_did` strings vs the catalog `agent` field and
+wonder if something is wrong. Python-side concern, no gateway code
+involved.
+**Workaround:** The mismatch is cosmetic — signature verification
+and routing both work. Ignore or pin `faq_agent` DID explicitly in
+the catalog.
+**Tracking:** _(no issue yet)_
+
+### fleet-env-can-desync-after-seed-rotation
+
+**Severity:** low
+**Summary:**
+[`examples/gateway_test_fleet/start_fleet.sh`](../examples/gateway_test_fleet/start_fleet.sh)
+writes fresh DIDs to `.fleet.env` on every run. But if an agent's
+seed rotates (`rm -rf ~/.bindu`, restart) and a user has an old
+shell with `$RESEARCH_DID` still sourced from a prior `.fleet.env`,
+their next `/plan` pins a stale DID. Signature verification fails
+with a cryptic mismatch error.
+**Fix:** have `start_fleet.sh` print a "re-source `.fleet.env` if
+you had one loaded previously" hint whenever any agent's DID
+differs from the previous run's cache.
+**Workaround:** Always `source .fleet.env` fresh after any fleet
+restart.
+**Tracking:** _(no issue yet)_
+
+### provider-openrouter-hardcoded
+
+**Severity:** low
+**Summary:**
+[`gateway/src/provider/index.ts`](../gateway/src/provider/index.ts)
+and downstream code assume the `openrouter/` model prefix. Adding
+direct Anthropic or direct OpenAI support (without going through
+OpenRouter's proxy) is a code change, not config.
+**Workaround:** Use OpenRouter as the universal proxy; it supports
+every major provider. Only reach for this when you need direct
+provider features (e.g. Anthropic prompt caching, OpenAI
+fine-tuned model access) that OpenRouter doesn't proxy.
+**Tracking:** _(no issue yet)_
+
+### accept-header-not-enforced-on-plan
+
+**Severity:** nit
+**Summary:** `POST /plan` returns `text/event-stream` regardless
+of whether the client sent `Accept: text/event-stream`. Clients
+that forget the header still get SSE, which is convenient but
+breaks strict content-negotiation semantics. Not currently
+documented as required in
+[`openapi.yaml`](../gateway/openapi.yaml) either.
+**Fix:** either document the header as required and return 406
+when absent, or keep the permissive behavior and document it.
+Currently we're in the worst middle ground.
+**Workaround:** None needed; current behavior is operationally
+fine. Consumers relying on strict 406 on wrong `Accept` won't get
+it.
+**Tracking:** _(no issue yet)_
+
+### openapi-sse-schemas-unused
+
+**Severity:** nit
+**Summary:** `redocly lint gateway/openapi.yaml` reports 13
+`no-unused-components` warnings on the `SSEEvent_*` schemas.
+OpenAPI 3.1 has no native SSE modeling, so those schemas sit as
+reference material rather than being `$ref`'d from a response
+body. The warnings are expected given the format's limitations,
+not indicative of drift.
+**Fix options:** (a) accept — pragmatic, 0 errors, just warnings;
+(b) use `oneOf` inside the `text/event-stream` response schema to
+enumerate each event shape (stretches OpenAPI); (c) publish a
+separate AsyncAPI 2.x/3.x spec for the SSE surface.
+**Workaround:** None needed; warnings don't break consumers.
+**Tracking:** _(no issue yet)_
+
+### no-planner-integration-test
+
+**Severity:** nit
+**Summary:** The unit tests cover every Gateway module in
+isolation, but no single test walks a `/plan` request
+end-to-end with a mocked LLM provider. The recipes feature,
+signatures surfacing, and observed-DID resolution were all
+verified manually against the real stack and via targeted unit
+tests for their pure helpers. A regression in the cross-cutting
+glue (tool → Bus → SSE JSON) would be caught only at integration
+time.
+**Fix:** mock `Provider.Service` with a fake emitting a canned
+`StreamEvent` sequence; assert SSE output matches expectations.
+**Workaround:** None — treat this as internal backlog.
+**Tracking:** _(no issue yet)_
+
+### no-health-handler-integration-test
+
+**Severity:** nit
+**Summary:**
+[`tests/api/health-route.test.ts`](../gateway/tests/api/health-route.test.ts)
+covers only the pure helpers (`splitModelId`, `deriveGatewayId`,
+`deriveAuthor`). The handler's full response shape — version,
+planner-model nesting, runtime flags, uptime math — is verified
+by manual curl, not by a test that builds the layer graph and
+asserts the JSON. Drift between `openapi.yaml`'s `HealthResponse`
+schema and the actual response would go unnoticed until someone
+hand-checks.
+**Fix:** build a minimal layer graph (mock Supabase) in a test,
+invoke the handler against a stub Hono context, assert the body
+matches the openapi schema.
+**Workaround:** Manual curl against a running gateway.
+**Tracking:** _(no issue yet)_
+
+### story-chapter5-missing-oauth-scope-explanation
+
+**Severity:** nit
+**Summary:**
+[`docs/GATEWAY.md`](../docs/GATEWAY.md) Chapter 5 sets
+`BINDU_GATEWAY_HYDRA_SCOPE` via env vars but never explains what
+OAuth scopes are or why `agent:read` + `agent:write` are the
+defaults. A reader walking the story linearly hits the config
+step without context.
+**Fix:** one-paragraph sidebar in Chapter 5 explaining "scopes
+are labels we ask Hydra to stamp on tokens; peers check them
+before accepting a `message/send`".
+**Workaround:** Cross-ref to gateway/README.md §DID signing which
+explains it.
 **Tracking:** _(no issue yet)_
 
 ---

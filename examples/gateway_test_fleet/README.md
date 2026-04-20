@@ -4,7 +4,7 @@ A reproducible multi-agent setup for exercising the Bindu Gateway end-to-end. Fi
 
 ## If you're new here
 
-**Don't start with this folder — start with [`gateway/docs/STORY.md`](../../gateway/docs/STORY.md).** That's the guided walkthrough; this fleet is what it uses under the hood. By Chapter 3 of STORY.md you'll have all five agents running via `start_fleet.sh` and a gateway driving them.
+**Don't start with this folder — start with [`docs/GATEWAY.md`](../../docs/GATEWAY.md).** That's the guided walkthrough; this fleet is what it uses under the hood. By Chapter 3 of STORY.md you'll have all five agents running via `start_fleet.sh` and a gateway driving them.
 
 ## What's in here
 
@@ -81,7 +81,7 @@ Each case writes its full SSE stream to `logs/<ID>.sse`. Open one end-to-end —
 
 ## Further reading
 
-- [`gateway/docs/STORY.md`](../../gateway/docs/STORY.md) — the end-to-end story this fleet illustrates
+- [`docs/GATEWAY.md`](../../docs/GATEWAY.md) — the end-to-end story this fleet illustrates
 - [`gateway/openapi.yaml`](../../gateway/openapi.yaml) — machine-readable API contract for the gateway
 - [`gateway/README.md`](../../gateway/README.md) — operator reference (env vars, /health, DID signing reference)
 - [`gateway/recipes/`](../../gateway/recipes/) — seed playbooks you can copy-edit as templates
