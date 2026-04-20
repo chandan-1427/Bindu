@@ -91,22 +91,43 @@ surfaced in the SSE stream yet. Separate ticket; tracked below as
 
 ---
 
-### 🟠 SSE `agent_did` doesn't surface observed DIDs
+### ✅ RESOLVED — SSE `agent_did` now surfaces observed DIDs with provenance
 
-**Where:** [`src/api/plan-route.ts:314-316`](../src/api/plan-route.ts:314) — `findPinnedDID` only reads `trust.pinnedDID` from the request catalog.
+**Was at:** [`src/api/plan-route.ts:314-316`](../src/api/plan-route.ts:314) — the old `findPinnedDID` only read `trust.pinnedDID` from the catalog.
 
-Consequence: even after `fetchAgentCard` populates `peer.card` inside the
-Bindu client (see the resolved AgentCard-fallback entry above), the SSE
-stream still emits `agent_did: null` unless the caller pinned a DID up
-front. Signature verification works against the observed DID; the
-display layer doesn't know about it.
+**Fixed by:** `findPinnedDID` replaced with
+[`findAgentDID(request, observedByName, agentName)`](../src/api/plan-route.ts) which returns an `{did, source}`
+pair. Resolution precedence:
 
-**Fix:** rename to `findAgentDID(request, agentName)`, add an observed-DID
-path (reads a per-plan cache populated after the first successful call
-publishes a Bus event with the observed DID), and add an optional
-`agent_did_source: "pinned" | "observed" | null` field on SSE frames so
-consumers can tell the provenance. Detailed in the earlier design
-discussion; ~80 LOC including tests.
+```
+pinned    trust.pinnedDID from /plan catalog       strongest
+observed  peer.card DID from /.well-known/agent.json   weaker
+null      neither path resolved                     no claim
+```
+
+Every `task.started` / `task.artifact` / `task.finished` SSE frame now
+carries both `agent_did` and a new `agent_did_source` field with
+values `"pinned" | "observed" | null` so consumers can apply the
+right trust policy per frame.
+
+The observed map is populated upfront at `/plan` start:
+`Promise.allSettled` over every catalog entry's
+[`fetchAgentCard()`](../src/bindu/client/agent-card.ts) with a
+**2-second total budget** shared across peers via a single
+AbortController — even a fleet of 50 agents caps discovery at 2s
+total, not 2s per peer. Results hit the per-process AgentCard cache
+so the Bindu client's own verification path gets them for free on
+subsequent calls.
+
+Coverage: [`tests/api/find-agent-did.test.ts`](../tests/api/find-agent-did.test.ts)
+— 6 cases pinning precedence (pinned wins over observed), per-agent
+independence, graceful null on unknown agent names (e.g.,
+`load_recipe` passes through the helper too), and map-vs-catalog
+isolation.
+
+openapi: new shared `AgentDIDSource` schema referenced from all three
+task.* SSE frames, with explicit docs on how consumers should treat
+each value for trust decisions.
 
 ---
 

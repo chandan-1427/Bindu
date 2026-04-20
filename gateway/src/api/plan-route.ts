@@ -12,6 +12,8 @@ import {
 import { Service as BusService, type Interface as BusInterface } from "../bus"
 import { Service as ConfigService, type Config } from "../config"
 import { PromptEvent } from "../session/prompt"
+import { fetchAgentCard } from "../bindu/client/agent-card"
+import { getPeerDID } from "../bindu/protocol/identity"
 import type { z } from "zod"
 
 /**
@@ -92,6 +94,35 @@ async function handleRequest(
     )
   }
 
+  // 2b. Pre-fetch each peer's AgentCard in parallel (total ≤2s budget)
+  //     so we can surface observed DIDs in SSE even when the caller
+  //     didn't pin one. Results are cached in fetchAgentCard's
+  //     per-process Map — the Bindu client's downstream runCall will
+  //     hit the same cache for free. Failures don't block: individual
+  //     peer AgentCards default to "not observed", `agent_did` stays
+  //     null for that peer.
+  const observedByName = new Map<string, string>()
+  {
+    const discoveryBudget = 2000
+    const ac = new AbortController()
+    const timer = setTimeout(() => ac.abort(), discoveryBudget)
+    try {
+      await Promise.allSettled(
+        request.agents.map(async (ag) => {
+          const card = await fetchAgentCard(ag.endpoint, {
+            signal: ac.signal,
+            timeoutMs: discoveryBudget,
+          })
+          if (!card) return
+          const did = getPeerDID(card)
+          if (did) observedByName.set(ag.name, did)
+        }),
+      )
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
   // 3. Resolve session BEFORE opening SSE — required so subscribers can
   //    filter events by sessionID. Any failure here returns plain JSON.
   let sessionCtx: SessionContext
@@ -150,17 +181,18 @@ async function handleRequest(
 
     spawnReader(ac.signal, ownEvent(bus.subscribe(PromptEvent.ToolCallStart)), async (evt) => {
       const agentName = parseAgentFromTool(evt.properties.tool)
+      // Resolve the peer's DID with provenance. Pinned wins over
+      // observed (the caller vouched; observed is self-reported).
+      // Emitted on every task.* frame so SSE consumers can partition
+      // by `agent_did_source` if they only trust pinned claims.
+      const agentId = findAgentDID(request, observedByName, agentName)
       await stream.writeSSE({
         event: "task.started",
         data: JSON.stringify({
           task_id: evt.properties.callID,
           agent: agentName,
-          // Unique identifier for the peer. Agent names are
-          // operator-chosen and can collide across catalogs; DIDs
-          // are the stable cryptographic handle. Null when the
-          // request didn't pin a DID for this peer (auth.type="none"
-          // / "bearer" / "bearer_env" without trust.pinnedDID).
-          agent_did: findPinnedDID(request, agentName),
+          agent_did: agentId.did,
+          agent_did_source: agentId.source,
           skill: parseSkillFromTool(evt.properties.tool),
           input: evt.properties.input,
         }),
@@ -178,12 +210,14 @@ async function handleRequest(
         evt.properties.signatures !== undefined
           ? { signatures: evt.properties.signatures }
           : {}
+      const agentId = findAgentDID(request, observedByName, agentName)
       await stream.writeSSE({
         event: "task.artifact",
         data: JSON.stringify({
           task_id: evt.properties.callID,
           agent: agentName,
-          agent_did: findPinnedDID(request, agentName),
+          agent_did: agentId.did,
+          agent_did_source: agentId.source,
           content: evt.properties.output,
           title: evt.properties.title,
           ...sigField,
@@ -194,7 +228,8 @@ async function handleRequest(
         data: JSON.stringify({
           task_id: evt.properties.callID,
           agent: agentName,
-          agent_did: findPinnedDID(request, agentName),
+          agent_did: agentId.did,
+          agent_did_source: agentId.source,
           state: evt.properties.error ? "failed" : "completed",
           ...(evt.properties.error ? { error: evt.properties.error } : {}),
           ...sigField,
@@ -312,17 +347,40 @@ function parseSkillFromTool(toolId: string): string {
   return m?.[2] ?? ""
 }
 
+/** Shape returned by findAgentDID — keeps DID + provenance together
+ *  so every SSE frame can emit both without re-running the lookup. */
+export interface AgentDIDResolution {
+  readonly did: string | null
+  readonly source: "pinned" | "observed" | null
+}
+
 /**
- * Resolve a peer's DID from the /plan request's agent catalog.
+ * Resolve a peer's DID with provenance, in precedence order:
  *
- * DIDs are optional in the API (callers can talk to ``auth.type="none"``
- * / ``"bearer"`` peers without ever pinning a DID), so this returns
- * ``null`` when the catalog has no ``trust.pinnedDID`` for the named
- * peer. SSE consumers treat ``null`` as "no cryptographic identity
- * declared" — they can still identify the peer by name for display,
- * just without the stable unique handle.
+ *   1. ``trust.pinnedDID`` from the /plan request catalog — the caller
+ *      explicitly declared which DID they expect. Strongest claim.
+ *   2. Observed DID from the peer's AgentCard (fetched upfront during
+ *      /plan setup, keyed by agent name) — the peer self-reports this
+ *      identity at /.well-known/agent.json. Weaker: an impostor can
+ *      advertise any DID they like unless signature verification is on.
+ *   3. ``null`` — neither path resolved. Consumer can still identify
+ *      the peer by name for display; cryptographic identity is
+ *      unknown.
+ *
+ * The ``source`` field lets SSE consumers decide which guarantee they
+ * need. A consumer building an audit log of "calls made to peer X"
+ * might accept ``observed`` (human-readable correlation); a compliance
+ * gate might reject anything other than ``pinned``.
  */
-function findPinnedDID(request: PlanRequest, agentName: string): string | null {
+export function findAgentDID(
+  request: PlanRequest,
+  observedByName: Map<string, string>,
+  agentName: string,
+): AgentDIDResolution {
   const entry = request.agents.find((a) => a.name === agentName)
-  return entry?.trust?.pinnedDID ?? null
+  const pinned = entry?.trust?.pinnedDID
+  if (pinned) return { did: pinned, source: "pinned" }
+  const observed = observedByName.get(agentName)
+  if (observed) return { did: observed, source: "observed" }
+  return { did: null, source: null }
 }

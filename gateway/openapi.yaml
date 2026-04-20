@@ -937,7 +937,7 @@ components:
 
     SSEEvent_TaskStarted:
       type: object
-      required: [task_id, agent, agent_did, skill, input]
+      required: [task_id, agent, agent_did, agent_did_source, skill, input]
       properties:
         task_id:
           type: string
@@ -947,7 +947,15 @@ components:
           description: Display name of the peer agent (from `agents[].name`).
         agent_did:
           type: [string, "null"]
-          description: Pinned DID for the agent (from `agents[].trust.pinnedDID`), or null if not pinned.
+          description: |
+            The peer's DID, resolved with precedence pinned → observed → null:
+            (a) `trust.pinnedDID` from the /plan catalog if set; otherwise
+            (b) the DID the peer published at `/.well-known/agent.json`,
+                fetched by the gateway at plan-open time; otherwise
+            (c) `null` — cryptographic identity undeclared.
+            See `agent_did_source` for which path resolved it.
+        agent_did_source:
+          $ref: "#/components/schemas/AgentDIDSource"
         skill:
           type: string
           description: Skill id being invoked on the peer.
@@ -961,7 +969,7 @@ components:
 
     SSEEvent_TaskArtifact:
       type: object
-      required: [task_id, agent, agent_did, content]
+      required: [task_id, agent, agent_did, agent_did_source, content]
       properties:
         task_id:
           type: string
@@ -969,6 +977,9 @@ components:
           type: string
         agent_did:
           type: [string, "null"]
+          description: Same resolution rules as on `task.started` — pinned → observed → null.
+        agent_did_source:
+          $ref: "#/components/schemas/AgentDIDSource"
         content:
           type: string
           description: |
@@ -1005,7 +1016,7 @@ components:
 
     SSEEvent_TaskFinished:
       type: object
-      required: [task_id, agent, agent_did, state]
+      required: [task_id, agent, agent_did, agent_did_source, state]
       properties:
         task_id:
           type: string
@@ -1013,6 +1024,9 @@ components:
           type: string
         agent_did:
           type: [string, "null"]
+          description: Same resolution rules as on `task.started` — pinned → observed → null.
+        agent_did_source:
+          $ref: "#/components/schemas/AgentDIDSource"
         state:
           type: string
           enum: [completed, failed]
@@ -1063,6 +1077,34 @@ components:
       type: object
       description: Empty object. Last frame of every successful plan.
       additionalProperties: false
+
+    AgentDIDSource:
+      type: [string, "null"]
+      enum: [pinned, observed, null]
+      description: |
+        Provenance of the `agent_did` on the same SSE frame. Tells
+        consumers which of three paths resolved the DID, so they can
+        apply the right trust policy:
+
+        - `"pinned"` — the caller declared `trust.pinnedDID` in the
+          /plan catalog. The caller vouched for this identity; the
+          gateway enforces it when `verifyDID: true` is also set.
+          Strongest claim a consumer can get out of this field.
+        - `"observed"` — the peer self-reported this DID in its
+          `/.well-known/agent.json` AgentCard, fetched by the gateway
+          at plan-open time. Weaker than pinned: an impostor standing
+          up a fake endpoint can advertise any DID they choose unless
+          signature verification is on.
+        - `null` — neither path resolved. Either the caller didn't pin
+          AND the AgentCard couldn't be fetched (no `.well-known`,
+          network failure, malformed), or the AgentCard had no DID in
+          either `id` or `capabilities.extensions[].uri`.
+
+        Compliance-gated consumers should treat `"observed"` and
+        `null` identically unless they also see a `signatures.ok:true`
+        with `signed > 0` on the same or a following frame — that's
+        the cryptographic evidence that promotes an observed DID to a
+        verified one.
 
     PlanSignatures:
       type: [object, "null"]
