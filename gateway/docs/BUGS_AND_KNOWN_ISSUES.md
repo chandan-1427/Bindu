@@ -47,26 +47,66 @@ Shipped on branch `feat/gateway-recipes` prior to merge.
 
 ---
 
-### 🔴 `peer.card` is never populated — AgentCard-based DID fallback is dead code
+### ✅ RESOLVED — `peer.card` is now populated via `fetchAgentCard`
 
-**Where:** [`src/bindu/client/index.ts:196`](../src/bindu/client/index.ts:196)
+**Was at:** [`src/bindu/client/index.ts:196`](../src/bindu/client/index.ts:196) (the fallback itself unchanged — it was correct, just starved of input).
+
+**Fixed by:** new [`src/bindu/client/agent-card.ts`](../src/bindu/client/agent-card.ts) —
+`fetchAgentCard(peerUrl, opts)` that GETs `<peer_url>/.well-known/agent.json`,
+Zod-parses it, and caches per-process. Wired into `runCall` at
+[`bindu/client/index.ts:153-159`](../src/bindu/client/index.ts:153):
 
 ```ts
-const did = peer.trust.pinnedDID ?? (peer.card ? getPeerDID(peer.card) : null)
+if (!input.peer.card && input.peer.trust?.verifyDID) {
+  const card = await fetchAgentCard(input.peer.url, { signal: input.signal })
+  if (card) input.peer.card = card
+}
 ```
 
-The `peer.card` branch is permanently `null` — nothing in the codebase
-fetches `/.well-known/agent.json` or sets `PeerDescriptor.card`. Grep
-confirms: no writes to `peer.card =` anywhere. Either:
+Now `trust.verifyDID: true` *without* a `pinnedDID` is a real feature:
+the gateway observes the peer's published DID, resolves its public key
+via the DID document, and verifies every artifact signature against it.
+The pinned path still wins when both are set.
 
-1. Implement AgentCard fetch at first call per session (the "option C"
-   from the earlier design discussion), OR
-2. Delete the fallback and mark `peer.card` as reserved for a future
-   feature — pretending the fallback exists is worse than owning up.
+Design choices:
+- **Fetch only when `verifyDID: true`** — no network cost on peers that
+  don't care about verification.
+- **2-second timeout** — short because it blocks the first call per
+  peer. Failures degrade to null (same behavior as before the fix).
+- **Per-process cache includes negatives** — a flaky peer doesn't cost
+  one outbound fetch per `/plan`.
+- **Mutation of `input.peer.card`** is safe because `PeerDescriptor`
+  is built fresh per catalog entry per request — no cross-session
+  leak.
 
-The plan-route's [`findPinnedDID()`](../src/api/plan-route.ts:314) also
-only reads `pinnedDID`, so `agent_did` in SSE is `null` whenever the
-caller didn't pin. Users quickly trip on this.
+Coverage: [`tests/bindu/agent-card-fetch.test.ts`](../tests/bindu/agent-card-fetch.test.ts)
+— 9 cases (success / 404 / malformed / schema-mismatch / network
+failure / cache hit / negative cache / per-URL isolation / timeout).
+
+**Remaining follow-up — SSE `agent_did` still null without pinnedDID.**
+`plan-route.ts`'s [`findPinnedDID()`](../src/api/plan-route.ts:314) only
+reads `trust.pinnedDID`. The observed DID from `peer.card` isn't
+surfaced in the SSE stream yet. Separate ticket; tracked below as
+🟠 "SSE `agent_did` doesn't surface observed DIDs".
+
+---
+
+### 🟠 SSE `agent_did` doesn't surface observed DIDs
+
+**Where:** [`src/api/plan-route.ts:314-316`](../src/api/plan-route.ts:314) — `findPinnedDID` only reads `trust.pinnedDID` from the request catalog.
+
+Consequence: even after `fetchAgentCard` populates `peer.card` inside the
+Bindu client (see the resolved AgentCard-fallback entry above), the SSE
+stream still emits `agent_did: null` unless the caller pinned a DID up
+front. Signature verification works against the observed DID; the
+display layer doesn't know about it.
+
+**Fix:** rename to `findAgentDID(request, agentName)`, add an observed-DID
+path (reads a per-plan cache populated after the first successful call
+publishes a Bus event with the observed DID), and add an optional
+`agent_did_source: "pinned" | "observed" | null` field on SSE frames so
+consumers can tell the provenance. Detailed in the earlier design
+discussion; ~80 LOC including tests.
 
 ---
 

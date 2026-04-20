@@ -10,6 +10,7 @@ import { verifyArtifact } from "../identity/verify"
 import { createResolver, primaryPublicKeyBase58 } from "../identity/resolve"
 import { getPeerDID } from "../protocol/identity"
 import type { AgentCard } from "../protocol/agent-card"
+import { fetchAgentCard } from "./agent-card"
 
 /**
  * Public Bindu client — the thing the planner's tools invoke.
@@ -148,6 +149,22 @@ async function runCall(
   identity: LocalIdentity | undefined,
   tokenProvider: TokenProvider | undefined,
 ): Promise<CallPeerOutcome> {
+  // Populate peer.card from /.well-known/agent.json on first contact.
+  // Cached per process — subsequent calls to the same peer are free.
+  // This activates the AgentCard-based DID fallback in
+  // maybeVerifySignatures: when the caller enabled `trust.verifyDID`
+  // without pinning a DID, the gateway recovers the peer's published
+  // DID here and verifies against its public key.
+  //
+  // Runs concurrently-safe (cache handles races via last-write-wins,
+  // AgentCards are stable), non-blocking on failure (returns null,
+  // peer.card stays undefined, verification falls through to the
+  // pinnedDID-only path).
+  if (!input.peer.card && input.peer.trust?.verifyDID) {
+    const card = await fetchAgentCard(input.peer.url, { signal: input.signal })
+    if (card) input.peer.card = card
+  }
+
   const parts: Part[] =
     typeof input.input === "string" ? [{ kind: "text", text: input.input }] : input.input
 
