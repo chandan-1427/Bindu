@@ -212,7 +212,7 @@ Open a terminal. Start the joke agent — it's one Python file that listens
 on port 3773 and answers with jokes:
 
 ```bash
-python3 examples/joke_agent.py
+python3 examples/gateway_test_fleet/joke_agent.py
 ```
 
 You'll see output like:
@@ -393,7 +393,7 @@ Five agents now, each on its own port:
 | faq_agent | 3778 | Answers from a canned FAQ |
 
 Each is ~60 lines of Python. Open any one — say
-[examples/joke_agent.py](../../examples/joke_agent.py) — and you'll see
+[joke_agent.py](../../examples/gateway_test_fleet/joke_agent.py) — and you'll see
 a small configuration that wires a language model (`openai/gpt-4o-mini`)
 to a few lines of instructions ("tell jokes, refuse other requests").
 Narrow scope on purpose so mistakes are visible.
