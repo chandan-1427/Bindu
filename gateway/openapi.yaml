@@ -972,9 +972,21 @@ components:
         content:
           type: string
           description: |
-            The peer's artifact text, wrapped in a `<remote_content agent="..." did="..." verified="yes|no|unknown">...</remote_content>`
+            The peer's artifact text, wrapped in a
+            `<remote_content agent="..." did="..." verified="...">...</remote_content>`
             envelope. The planner treats this as untrusted data — clients
             should too.
+
+            `verified` is four-valued:
+              - `yes`       → at least one signed artifact and all signed
+                              verified against the pinned DID's public key.
+                              Strongest guarantee.
+              - `no`        → at least one signed artifact failed
+                              verification. Task is also marked `failed`.
+              - `unsigned`  → verification ran but no artifact carried a
+                              signature. The body is unverified hearsay.
+              - `unknown`   → verification wasn't attempted (no `verifyDID`,
+                              no `pinnedDID`, or DID doc unreachable).
         title:
           type: string
           description: Short display title, typically `@<agent>/<skill>`.

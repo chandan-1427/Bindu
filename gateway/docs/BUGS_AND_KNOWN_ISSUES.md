@@ -16,24 +16,34 @@ not a discovery project.
 
 ## Security and correctness
 
-### 🔴 `signatures.ok === true` can be vacuously true
+### ✅ RESOLVED — `signatures.ok === true` was vacuously true
 
-**Where:** [`src/bindu/client/index.ts:218`](../src/bindu/client/index.ts:218)
+**Was at:** [`src/bindu/client/index.ts:218`](../src/bindu/client/index.ts:218)
+(unchanged — that's the authoritative `ok` boolean, which still has
+`signed === 0 ? true` semantics because "nothing to fail" isn't a failure).
 
-```ts
-ok: signed === 0 ? true : signed === verified
+**Fixed by:** making the `<remote_content>` envelope label four-valued
+instead of three-valued. See
+[`computeVerifiedLabel()`](../src/planner/index.ts) — new pure helper
+exported so the mapping is testable without the whole peer-call loop.
+
+```
+null                                      → "unknown"
+!ok                                       → "no"
+ok && signed === 0                        → "unsigned"   <-- new
+ok && signed > 0 && signed === verified   → "yes"
 ```
 
-If an agent returns artifacts with **no signatures at all**, `ok` is `true`
-and the `<remote_content>` envelope gets stamped `verified="yes"` — which is
-indistinguishable (to the planner LLM reading the envelope) from "every
-signature checked out against the pinned DID." The `signatures` SSE field
-now exposes the counts so operators can tell, but the envelope itself still
-lies.
+Before the fix, an agent that returned artifacts with no signatures
+attached caused `signatures.ok` to be vacuously `true`, which the
+envelope stamped as `verified="yes"` — indistinguishable from a real
+cryptographic pass. The planner LLM trusted it equally. Post-fix the
+`unsigned` label surfaces the ambiguity explicitly so the planner can
+downweight unverified-hearsay responses in its reasoning.
 
-**Fix idea:** make the envelope's `verified` attribute three-valued —
-`verified`, `unverified-unsigned`, `unverified-failed` — and update the
-planner's system prompt so it knows how to read each.
+Coverage: [`tests/planner/verified-label.test.ts`](../tests/planner/verified-label.test.ts) — 7 cases pinning each branch including the regression (vacuous-yes becomes `"unsigned"`).
+
+Shipped on branch `feat/gateway-recipes` prior to merge.
 
 ---
 

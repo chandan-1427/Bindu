@@ -398,11 +398,15 @@ function buildSkillTool(peer: PeerDescriptor, skill: SkillRequest, deps: BuildTo
           },
         })
 
-        // 4. Wrap the output in an untrusted-content envelope for the planner
+        // 4. Wrap the output in an untrusted-content envelope for the planner.
+        //    The `verified` attribute is four-valued (yes/no/unsigned/unknown)
+        //    so the planner LLM can distinguish a cryptographic pass from
+        //    "no signatures existed to check" — the latter used to appear
+        //    as `verified="yes"` (vacuous) and quietly misled the model.
         const wrapped = wrapRemoteContent({
           agentName: peer.name,
           did: peer.trust?.pinnedDID ?? null,
-          verified: outcome.signatures?.ok ?? null,
+          verified: computeVerifiedLabel(outcome.signatures ?? null),
           body: outputText,
         })
 
@@ -557,13 +561,46 @@ function extractOutputText(task: import("../bindu/protocol/types").Task): string
   return pieces.join("\n\n")
 }
 
+/**
+ * Label the `verified` attribute on the <remote_content> envelope with
+ * enough fidelity that the planner LLM can distinguish the four real
+ * states verification can produce:
+ *
+ *   - `"yes"`       — at least one artifact carried a signature AND every
+ *                     signed artifact checked out against the pinned DID's
+ *                     public key. Strongest claim.
+ *   - `"no"`        — at least one signed artifact failed verification.
+ *                     Treat the body as definitely-tampered or
+ *                     wrong-provenance; the task is also marked `failed`.
+ *   - `"unsigned"`  — verification ran, but no artifact had a signature
+ *                     attached. Bodies came back; nothing was checked.
+ *                     Previously this collapsed into `"yes"` because the
+ *                     Bindu client's `signatures.ok` is vacuously true
+ *                     when `signed === 0` — misleading. Now it's
+ *                     explicit, so the planner can weight the source
+ *                     appropriately (e.g., treat as unverified hearsay).
+ *   - `"unknown"`   — verification was not attempted. Either
+ *                     `trust.verifyDID` was false, no pinned DID was
+ *                     supplied, or DID document resolution failed.
+ */
+export type VerifiedLabel = "yes" | "no" | "unsigned" | "unknown"
+
+export function computeVerifiedLabel(
+  signatures: { ok: boolean; signed: number; verified: number; unsigned: number } | null,
+): VerifiedLabel {
+  if (signatures === null) return "unknown"
+  if (!signatures.ok) return "no"
+  if (signatures.signed === 0) return "unsigned"
+  return "yes"
+}
+
 function wrapRemoteContent(input: {
   agentName: string
   did: string | null
-  verified: boolean | null
+  verified: VerifiedLabel
   body: string
 }): string {
-  const verified = input.verified === null ? "unknown" : input.verified ? "yes" : "no"
+  const verified = input.verified
   const didAttr = input.did ? ` did="${escapeAttr(input.did)}"` : ""
   // Scrub nested envelope markers and common injection phrases so a
   // malicious peer can't forge a wrapper inside their own response.
