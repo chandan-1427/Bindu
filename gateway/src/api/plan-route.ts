@@ -14,7 +14,29 @@ import { Service as ConfigService, type Config } from "../config"
 import { PromptEvent } from "../session/prompt"
 import { fetchAgentCard } from "../bindu/client/agent-card"
 import { getPeerDID } from "../bindu/protocol/identity"
-import type { z } from "zod"
+import { z } from "zod"
+
+/**
+ * Turn a validation or session-setup error into a JSON body with just the
+ * caller-actionable parts. Before this, we dumped `ZodError.message` — a
+ * giant JSON blob of internal schema types — into `detail`, which made
+ * 400 responses hard to consume and surfaced internal field orderings
+ * unnecessarily.
+ */
+export function formatErrorDetail(e: unknown): {
+  detail: string
+  issues?: Array<{ path: string; message: string }>
+} {
+  if (e instanceof z.ZodError) {
+    const issues = e.issues.map((i) => ({
+      path: i.path.join(".") || "(root)",
+      message: i.message,
+    }))
+    const summary = issues.map((i) => `${i.path}: ${i.message}`).join("; ")
+    return { detail: summary, issues }
+  }
+  return { detail: e instanceof Error ? e.message : String(e) }
+}
 
 /**
  * POST /plan — External-facing Hono handler.
@@ -67,7 +89,7 @@ async function handleRequest(
     const body = await c.req.json()
     request = PlanRequest.parse(body)
   } catch (e) {
-    return c.json({ error: "invalid_request", detail: (e as Error).message }, 400)
+    return c.json({ error: "invalid_request", ...formatErrorDetail(e) }, 400)
   }
 
   // 2a. Reject catalogs that would produce colliding tool ids — silent
@@ -129,7 +151,7 @@ async function handleRequest(
   try {
     sessionCtx = await Effect.runPromise(planner.prepareSession(request))
   } catch (e) {
-    return c.json({ error: "session_failed", detail: (e as Error).message }, 500)
+    return c.json({ error: "session_failed", ...formatErrorDetail(e) }, 500)
   }
 
   // 4. SSE response
