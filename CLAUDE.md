@@ -208,6 +208,7 @@ bindu/
 - **[2026-03-29]** Payment context handling: Use `.pop()` instead of `del` for optional metadata keys (PR #418)
 - **[2026-03-29]** Windows compatibility: DID private key permissions - use `os.open()` on POSIX, direct write on Windows (PR #418)
 - **[2026-03-27]** gRPC docs reorganized: See `docs/grpc/` for architecture, API reference, SDK guides
+- **[2026-04-20]** Gateway recipes: progressive-disclosure playbooks the planner lazy-loads on demand. Live in `gateway/recipes/` as markdown files with YAML frontmatter. Metadata (name + description) goes into the system prompt; full body only loads when the planner calls `load_recipe`. Pattern ported from OpenCode skills, renamed because the gateway already uses "skill" for A2A agent capabilities. See `gateway/src/recipe/index.ts` and `gateway/README.md` §Recipes.
 
 ## Key Design Decisions
 

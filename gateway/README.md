@@ -17,7 +17,7 @@ For design rationale, see [`plans/PLAN.md`](./plans/PLAN.md). Phase-by-phase det
 Phase 1 Days 1–9 shipped. Core gateway is functionally complete:
 
 - ✅ Bus, Config, DB (Supabase), Auth, Permission, Provider (Anthropic/OpenAI)
-- ✅ Tool registry + Skill/Agent loaders
+- ✅ Tool registry + Agent/Recipe loaders (recipes = progressive-disclosure playbooks)
 - ✅ Session module (message, state, LLM stream, the **loop**, compaction, summary, revert, overflow detection)
 - ✅ Bindu protocol: Zod types for Message/Part/Artifact/Task/AgentCard, mixed-casing normalize, DID parse, JSON-RPC envelope, BinduError classification
 - ✅ Bindu identity: ed25519 verify (against real Phase 0 signatures)
@@ -164,6 +164,60 @@ Hono HTTP (src/server + src/api)
 ```
 
 See [`plans/PLAN.md`](./plans/PLAN.md) §Architecture for the full picture.
+
+---
+
+## Recipes — progressive-disclosure playbooks
+
+Recipes are markdown playbooks the planner lazy-loads when a task matches. Only metadata (`name` + `description`) sits in the system prompt; the full body is fetched on demand via the `load_recipe` tool. Pattern borrowed from [OpenCode Skills](https://opencode.ai/docs/skills/), renamed to avoid collision with A2A `SkillRequest` (an agent capability on the `/plan` request body).
+
+**Why you'd write one:** to encode multi-agent orchestration patterns ("research question → search agent → summarizer"), handling rules for A2A states (`input-required`, `payment-required`, `auth-required`), or tenant-specific policies. Operators drop a markdown file in `gateway/recipes/` — no code change.
+
+### Layouts
+
+```
+gateway/recipes/foo.md                 flat recipe, no bundled files
+gateway/recipes/bar/RECIPE.md          bundled recipe — siblings like
+gateway/recipes/bar/scripts/run.sh     scripts/, reference/ are surfaced
+gateway/recipes/bar/reference/notes.md to the planner when bar loads
+```
+
+### Frontmatter
+
+```yaml
+---
+name: multi-agent-research          # required; falls back to filename/dir stem
+description: One-line summary that # required (non-empty) — shown in the
+  tells the planner when to load   # system prompt and tool description
+tags: [research, orchestration]    # optional
+triggers: [research, investigate]  # optional planner hints
+---
+
+# Playbook body in markdown — free-form instructions the planner follows
+# after loading the recipe.
+```
+
+### Per-agent visibility
+
+Recipes respect the agent permission system. In an agent's frontmatter:
+
+```yaml
+permission:
+  recipe:
+    "secret-*": "deny"    # hide recipes matching the pattern from this agent
+    "*": "allow"          # everything else is visible
+```
+
+Default action is `allow` — an agent with no `recipe:` rules sees everything.
+
+### How it works end-to-end
+
+1. On each `/plan`, the planner calls `recipes.available(plannerAgent)`.
+2. The filtered list is (a) rendered into the system prompt as `<available_recipes>…</available_recipes>` and (b) used to generate the description of the `load_recipe` tool.
+3. When the planner decides a recipe applies, it calls `load_recipe({ name })`.
+4. The tool returns a `<recipe_content>` envelope with the full markdown and a `<recipe_files>` block listing bundled sibling files. The planner quotes or follows the body for the rest of the turn.
+
+See [`src/recipe/index.ts`](./src/recipe/index.ts) for the loader and [`src/tool/recipe.ts`](./src/tool/recipe.ts) for the tool. Two seed recipes live under [`recipes/`](./recipes/).
 
 ---
 

@@ -8,6 +8,8 @@ import { Service as DBService } from "../db"
 import { Service as BusService } from "../bus"
 import { Service as BinduClientService } from "../bindu/client"
 import { Service as AgentService } from "../agent"
+import * as Recipe from "../recipe"
+import { buildLoadRecipeTool } from "../tool/recipe"
 import { define, type Def } from "../tool/tool"
 import type { Context as ToolContext, ExecuteResult } from "../tool/tool"
 import type { PeerDescriptor } from "../bindu/client"
@@ -165,6 +167,7 @@ export const layer = Layer.effect(
     const bus = yield* BusService
     const client = yield* BinduClientService
     const agents = yield* AgentService
+    const recipes = yield* Recipe.Service
 
     const prepareSession: Interface["prepareSession"] = (request) =>
       Effect.gen(function* () {
@@ -230,6 +233,16 @@ export const layer = Layer.effect(
           }
         }
 
+        // Recipes (progressive-disclosure playbooks) are filtered through
+        // the planner agent's permission rules; an empty list means either
+        // no recipes on disk or all denied. In either case we skip the
+        // system-prompt block and the tool description falls back to
+        // "no recipes available" — no noise injected.
+        const recipeList = yield* recipes.available(plannerAgent)
+        tools.push(buildLoadRecipeTool(recipes, recipeList))
+        const recipeSummary =
+          recipeList.length > 0 ? Recipe.fmt(recipeList, { verbose: true }) : undefined
+
         const message = yield* prompt.prompt({
           sessionID: ctx.sessionID,
           agent: "planner",
@@ -245,6 +258,7 @@ export const layer = Layer.effect(
           modelOverride: plannerAgent.model,
           stepsOverride: request.preferences?.max_steps ?? plannerAgent.steps,
           abort: opts?.abort,
+          recipeSummary,
         })
 
         return { message, tasksRecorded }

@@ -106,6 +106,13 @@ export interface PromptInput {
   /** Override for max agentic steps, bypassing agent.steps. */
   stepsOverride?: number
   abort?: AbortSignal
+  /**
+   * Rendered recipe index (Recipe.fmt(list, { verbose: true })) to splice
+   * into the system prompt between the agent's own prompt and the
+   * configured instructions. Omit when there are no recipes to advertise —
+   * an empty string here would still leak an empty block to the LLM.
+   */
+  recipeSummary?: string
 }
 
 export interface Interface {
@@ -151,7 +158,7 @@ export const layer = Layer.effect(
         const modelMessages: ModelMessage[] = toModelMessages(history)
 
         // 3. Build system prompt
-        const systemPrompt = buildSystemPrompt(agentInfo, cfg.instructions)
+        const systemPrompt = buildSystemPrompt(agentInfo, cfg.instructions, input.recipeSummary)
 
         // 4. Build AI SDK tools from the registered tools
         const aiTools = yield* Effect.all(
@@ -338,9 +345,14 @@ export const layer = Layer.effect(
   }),
 )
 
-function buildSystemPrompt(agent: AgentInfo, instructions: string[]): string {
+function buildSystemPrompt(
+  agent: AgentInfo,
+  instructions: string[],
+  recipeSummary?: string,
+): string {
   const parts: string[] = []
   if (agent.prompt) parts.push(agent.prompt)
+  if (recipeSummary) parts.push(recipeSummary)
   for (const inst of instructions) parts.push(inst)
   return parts.join("\n\n").trim()
 }

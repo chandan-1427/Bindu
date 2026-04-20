@@ -8,7 +8,7 @@ import * as Auth from "./auth"
 import * as DB from "./db"
 import * as Permission from "./permission"
 import * as Provider from "./provider"
-import * as Skill from "./skill"
+import * as Recipe from "./recipe"
 import * as Agent from "./agent"
 import * as Session from "./session"
 import * as SessionCompaction from "./session/compaction"
@@ -64,7 +64,7 @@ function buildAppLayer(
     Permission.layer,
     ToolRegistry.layer,
     BinduClient.makeLayer(identity, tokenProvider),
-    Skill.defaultLayer,
+    Recipe.defaultLayer,
   )
 
   // Level 2 — need Config (implicitly resolved by provideMerge)
