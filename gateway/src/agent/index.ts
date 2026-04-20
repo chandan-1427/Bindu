@@ -2,7 +2,7 @@ import { Context, Effect, Layer } from "effect"
 import { z } from "zod"
 import { readdirSync, readFileSync, existsSync, statSync } from "fs"
 import { resolve, basename } from "path"
-import { splitFrontmatter } from "../skill"
+import { splitFrontmatter, parseYaml } from "../_shared/util/frontmatter"
 import { Ruleset, fromConfig as permFromConfig } from "../permission"
 import { Service as ConfigService } from "../config"
 
@@ -63,56 +63,6 @@ export const Info = z.object({
   hidden: z.boolean().optional(),
 })
 export type Info = z.infer<typeof Info>
-
-/** Parse a YAML frontmatter block value (shared with skill module). */
-function parseYaml(src: string): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  const stack: { indent: number; obj: Record<string, unknown> }[] = [{ indent: -1, obj: out }]
-
-  for (const rawLine of src.split(/\r?\n/)) {
-    const line = rawLine.replace(/\s+$/, "")
-    if (!line.trim() || line.trim().startsWith("#")) continue
-    const indent = line.length - line.trimStart().length
-    while (stack.length > 1 && indent <= stack[stack.length - 1].indent) stack.pop()
-    const current = stack[stack.length - 1].obj
-
-    const m = line.trim().match(/^([A-Za-z0-9_\-]+):\s*(.*)$/)
-    if (!m) continue
-    const key = m[1]
-    const rest = m[2]
-
-    if (rest === "") {
-      const child: Record<string, unknown> = {}
-      current[key] = child
-      stack.push({ indent, obj: child })
-      continue
-    }
-
-    current[key] = parseScalar(rest)
-  }
-  return out
-}
-
-function parseScalar(s: string): unknown {
-  const t = s.trim()
-  if (t === "true") return true
-  if (t === "false") return false
-  if (t === "null" || t === "~") return null
-  if (/^-?\d+$/.test(t)) return Number(t)
-  if (/^-?\d+\.\d+$/.test(t)) return Number(t)
-  if (t.startsWith("[") && t.endsWith("]")) {
-    const inner = t.slice(1, -1).trim()
-    if (!inner) return []
-    return inner
-      .split(",")
-      .map((x) => x.trim())
-      .map((x) => (x.startsWith('"') || x.startsWith("'") ? x.slice(1, -1) : x))
-  }
-  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
-    return t.slice(1, -1)
-  }
-  return t
-}
 
 export function parseAgentFile(path: string, raw: string): Info {
   const { frontmatter, body } = splitFrontmatter(raw)
