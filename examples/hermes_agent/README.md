@@ -1,67 +1,75 @@
 # Hermes-Agent via Bindu
 
-Run [hermes-agent](https://github.com/NousResearch/hermes-agent) — a full tool-
-using coding/research agent — as a Bindu A2A microservice. You get Hermes's
-tool loop (web search, file ops, code execution, browser, MCP, etc.) behind
-Bindu's DID identity, A2A protocol, OAuth2, and x402 payments.
+Run [hermes-agent](https://github.com/NousResearch/hermes-agent) — a
+tool-using coding / research agent with web, file, and code-exec tools —
+as a Bindu A2A microservice. One file, two dependencies, self-contained.
 
-The adapter that does the wrapping lives in the hermes-agent repo as the
-`[bindu]` optional extra. This example is a thin pointer.
+Behind Bindu you get: DID identity, A2A JSON-RPC on `:3773`, optional
+OAuth2 auth, x402 payments, and a public FRP tunnel.
 
 ## Requirements
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/)
-- A model API key — `OPENROUTER_API_KEY` (or whichever provider your model uses)
+- `OPENROUTER_API_KEY` (or another provider key your chosen model uses)
 
 ## Run
 
-```bash
-cd examples/hermes_agent
-cp .env.example .env && vim .env        # set your model key
+Hermes-agent is not on PyPI yet — install directly from GitHub:
 
-uv pip install 'hermes-agent[bindu]'
+```bash
+uv pip install bindu "hermes-agent @ git+https://github.com/NousResearch/hermes-agent.git"
+
+cp .env.example .env
+$EDITOR .env                       # set OPENROUTER_API_KEY
+
 python hermes_simple_example.py
 ```
 
-Equivalent one-liner via the Hermes CLI:
+Or with a throw-away isolated env (no global install):
 
 ```bash
-uv run hermes bindu serve
+uv run --python 3.12 \
+  --with bindu \
+  --with "hermes-agent @ git+https://github.com/NousResearch/hermes-agent.git" \
+  python hermes_simple_example.py
 ```
+
+The first-line banner will show your agent's DID and the `http://localhost:3773`
+endpoint.
 
 ## Safety tiers
 
-A bindufied Hermes can expose powerful local tools. Pick the tier matching
+`HERMES_TIER` gates which Hermes toolsets are exposed. Hermes has ~20
+toolsets including terminal and code execution — pick the tier matching
 your deployment:
 
-| `HERMES_BINDU_TIER` | Toolset | When to use |
+| `HERMES_TIER` | Toolsets | When |
 |---|---|---|
-| `read` (default) | web search + extract | Public / tunneled deployments |
-| `sandbox` | adds filesystem + `execute_code` | Trusted caller, local FS |
-| `full` | everything incl. terminal, browser | Localhost-only, private |
+| `read` (default) | `web` (search + extract) | Public / tunneled |
+| `sandbox` | `web` + `file` + `moa` | Trusted caller, local FS ok |
+| `full` | everything (terminal, browser, code-exec, MCP) | Localhost only |
 
-**Do not combine `full` with a public tunnel** — that's RCE-as-a-service.
+**Never combine `full` with a public tunnel.** That's RCE-as-a-service.
 
-## Fire-and-pull (quick demo)
+## Fire and pull
 
-All IDs must be real UUIDs. `tasks/get` keys off `taskId` (not `id`). See the
-authoritative [openapi.yaml](https://github.com/raahulrahl/docs/blob/main/openapi.yaml)
-for the complete JSON-RPC surface (`tasks/list`, `tasks/cancel`,
-`contexts/list`, push notifications, `message/stream`, …).
+The protocol is standard A2A JSON-RPC — see the authoritative
+[openapi.yaml](https://github.com/raahulrahl/docs/blob/main/openapi.yaml).
+All IDs must be real UUIDs; `tasks/get` keys off `taskId` (not `id`).
 
 ```bash
 uuid() { uuidgen | tr 'A-Z' 'a-z'; }
 RID=$(uuid); MID=$(uuid); CID=$(uuid); TID=$(uuid)
 
-# Fire
+# Fire — returns immediately with state: submitted + taskId
 curl -s -X POST http://localhost:3773/ -H 'Content-Type: application/json' \
   -d "{
     \"jsonrpc\":\"2.0\",\"method\":\"message/send\",\"id\":\"$RID\",
     \"params\":{
       \"message\":{
         \"role\":\"user\",
-        \"parts\":[{\"kind\":\"text\",\"text\":\"summarize https://getbindu.com in one sentence\"}],
+        \"parts\":[{\"kind\":\"text\",\"text\":\"summarize bindu in one sentence\"}],
         \"kind\":\"message\",
         \"messageId\":\"$MID\",\"contextId\":\"$CID\",\"taskId\":\"$TID\"
       },
@@ -75,19 +83,24 @@ curl -s -X POST http://localhost:3773/ -H 'Content-Type: application/json' \
   | jq '.result | {state: .status.state, text: .artifacts[0].parts[0].text}'
 ```
 
+Other methods on the same endpoint: `tasks/list`, `tasks/cancel`,
+`contexts/list`, `tasks/pushNotificationConfig/set` (webhooks),
+`message/stream` (SSE).
+
 ## How it fits together
 
 ```
-curl ─► Bindu HTTP (:3773) ─► ManifestWorker ─► handler(messages) ─► AIAgent.chat()
-                                                                       │
-                                                                       └─► Hermes tool loop
+curl ─► Bindu HTTP (:3773) ─► ManifestWorker ─► handler(messages)
+                                                    │
+                                                    ▼
+                                            AIAgent.chat(last_user_text)
+                                                    │
+                                                    └─► Hermes tool loop
 ```
 
 The handler keeps **one shared `AIAgent`** per process so Anthropic prompt
-caching stays valid across turns. Bindu feeds the full history; Hermes only
-sees the newest user message (Bindu is the source of truth for history,
-Hermes owns the live model state for caching). Every artifact text is
-DID-signed on the way out.
+caching stays valid across turns. Bindu feeds the full history; the handler
+only passes the newest user message into Hermes (Bindu is the source of
+truth for history; Hermes owns the live model state for caching).
 
-See [`bindu_adapter/README.md`](https://github.com/NousResearch/hermes-agent/tree/main/bindu_adapter)
-in the hermes-agent repo for deeper details.
+Every artifact text part returned by Bindu is DID-signed on the way out.

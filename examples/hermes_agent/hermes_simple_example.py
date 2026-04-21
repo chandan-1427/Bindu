@@ -1,56 +1,106 @@
 """Hermes-Agent via Bindu.
 
-Bindufies the Hermes `AIAgent` as an A2A microservice with DID identity,
-OAuth2-ready HTTP on port 3773, optional FRP tunnel, and x402 payments.
+Runs hermes-agent's ``AIAgent`` — a full tool-using coding/research agent —
+as a bindufied A2A microservice. DID identity, OAuth2-ready HTTP on :3773,
+optional FRP tunnel, x402 payments.
 
-The adapter lives inside the hermes-agent repo under `bindu_adapter/` and
-ships with the `[bindu]` optional extra. This example is just a pointer
-that defers to it.
+This example is self-contained: it does not depend on any add-on module.
+Only the two packages listed below need to be installed.
 
-Usage:
-    # From a Python 3.12+ environment:
-    uv pip install 'hermes-agent[bindu]'
-    python examples/hermes_agent/hermes_simple_example.py
+Setup (Python 3.12+):
+    uv pip install bindu \\
+        "hermes-agent @ git+https://github.com/NousResearch/hermes-agent.git"
+    cp .env.example .env && $EDITOR .env      # set OPENROUTER_API_KEY
 
-    # Or use the CLI shortcut (same thing):
-    uv run hermes bindu serve
+Run:
+    python hermes_simple_example.py
 
-Environment:
-    OPENROUTER_API_KEY  (or ANTHROPIC_API_KEY, whichever the chosen model needs)
-    HERMES_BINDU_MODEL  default "anthropic/claude-sonnet-4.6"
-    HERMES_BINDU_TIER   "read" (default) | "sandbox" | "full"
-    HERMES_BINDU_URL    default "http://localhost:3773"
-
-Tiers gate the toolset so a tunneled deployment is safe by default:
-    read    — web search + web extract only
+Tiers (``HERMES_TIER`` env var) control which Hermes toolsets are exposed:
+    read    — web search + web extract only (default, safe for tunnels)
     sandbox — adds filesystem read/write and execute_code
-    full    — everything (terminal, browser, MCP). Local-only.
+    full    — everything (terminal, browser, MCP). Localhost only.
+
+Note: ``full`` tier exposes terminal + code execution. Never combine it with
+a public tunnel.
 """
 
 from __future__ import annotations
 
 import os
-import sys
+from typing import Any
+
+from bindu.penguin.bindufy import bindufy
+from run_agent import AIAgent
+
+# Toolset tiers. ``None`` means no restriction (full tier).
+_TIERS: dict[str, list[str] | None] = {
+    "read": ["web"],
+    "sandbox": ["web", "file", "moa"],
+    "full": None,
+}
+
+_agent: AIAgent | None = None
 
 
-def main() -> None:
-    try:
-        from bindu_adapter.serve import run
-    except ImportError:
-        sys.stderr.write(
-            "hermes-agent is not installed with the [bindu] extra.\n"
-            "Install it on Python 3.12+:\n"
-            "    uv pip install 'hermes-agent[bindu]'\n"
+def _get_agent() -> AIAgent:
+    """Lazily create one shared AIAgent per process.
+
+    Keeping a single long-lived agent preserves Anthropic prompt caching
+    across Bindu calls — Bindu replays the full history every request, but
+    we only feed the *new* user message into the agent's growing message list.
+    """
+    global _agent
+    if _agent is None:
+        tier = os.getenv("HERMES_TIER", "read")
+        _agent = AIAgent(
+            model=os.getenv("HERMES_MODEL", "anthropic/claude-3.5-haiku"),
+            max_iterations=30,
+            enabled_toolsets=_TIERS.get(tier, _TIERS["read"]),
+            quiet_mode=True,
+            platform="bindu",
+            save_trajectories=False,
+            skip_memory=True,
+            persist_session=False,
         )
-        sys.exit(1)
+    return _agent
 
-    run(
-        model=os.getenv("HERMES_BINDU_MODEL"),
-        tier=os.getenv("HERMES_BINDU_TIER"),
-        url=os.getenv("HERMES_BINDU_URL"),
-        name=os.getenv("HERMES_BINDU_NAME", "hermes"),
-    )
+
+def _last_user_text(messages: list[dict[str, Any]]) -> str:
+    """Extract the newest user message's text, tolerating the A2A parts shape."""
+    for m in reversed(messages):
+        if m.get("role") != "user":
+            continue
+        content = m.get("content", "")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "\n".join(
+                p.get("text", "")
+                for p in content
+                if isinstance(p, dict) and p.get("kind") == "text"
+            )
+    return ""
+
+
+def handler(messages: list[dict[str, Any]]) -> str:
+    """Bindu handler contract: (messages) -> string."""
+    text = _last_user_text(messages)
+    if not text.strip():
+        return "Empty message."
+    return _get_agent().chat(text)
+
+
+config = {
+    "author": os.getenv("HERMES_AUTHOR", "you@example.com"),
+    "name": os.getenv("HERMES_NAME", "hermes"),
+    "description": "Hermes agent (tool-using) exposed as a Bindu A2A microservice",
+    "deployment": {
+        "url": os.getenv("HERMES_URL", "http://localhost:3773"),
+        "expose": True,
+    },
+    "skills": [],
+}
 
 
 if __name__ == "__main__":
-    main()
+    bindufy(config, handler)
