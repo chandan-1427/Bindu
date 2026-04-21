@@ -1,56 +1,58 @@
 <div align="center" id="top">
   <a href="https://getbindu.com">
-    <picture>
-      <img src="assets/bindu.png" alt="Bindu" width="300">
-    </picture>
+    <img src="assets/bindu_logo.png" alt="Bindu" width="180" />
   </a>
-</div>
 
-<p align="center">
-  <em>The identity, communication & payments layer for AI agents</em>
-</p>
+  <h1>Bindu</h1>
 
-<p align="center">
-  <a href="README.md">🇬🇧 English</a> •
-  <a href="README.de.md">🇩🇪 Deutsch</a> •
-  <a href="README.es.md">🇪🇸 Español</a> •
-  <a href="README.fr.md">🇫🇷 Français</a> •
-  <a href="README.hi.md">🇮🇳 हिंदी</a> •
-  <a href="README.bn.md">🇮🇳 বাংলা</a> •
-  <a href="README.zh.md">🇨🇳 中文</a> •
-  <a href="README.nl.md">🇳🇱 Nederlands</a> •
-  <a href="README.ta.md">🇮🇳 தமிழ்</a>
-</p>
+  <p>
+    <strong>The identity, communication & payments layer for AI agents.</strong>
+  </p>
 
-<p align="center">
-  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
-  <a href="https://hits.sh/github.com/Saptha-me/Bindu.svg"><img src="https://hits.sh/github.com/Saptha-me/Bindu.svg" alt="Hits"></a>
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12+-blue.svg" alt="Python Version"></a>
-  <a href="https://pypi.org/project/bindu/"><img src="https://img.shields.io/pypi/v/bindu.svg" alt="PyPI version"></a>
-  <a href="https://coveralls.io/github/Saptha-me/Bindu?branch=v0.3.18"><img src="https://coveralls.io/repos/github/Saptha-me/Bindu/badge.svg?branch=v0.3.18" alt="Coverage"></a>
-  <a href="https://github.com/getbindu/Bindu/actions/workflows/release.yml"><img src="https://github.com/getbindu/Bindu/actions/workflows/release.yml/badge.svg" alt="Tests"></a>
-  <a href="https://discord.gg/3w5zuYUuwt"><img src="https://img.shields.io/badge/Join%20Discord-7289DA?logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://github.com/getbindu/Bindu/graphs/contributors"><img src="https://img.shields.io/github/contributors/getbindu/Bindu" alt="Contributors"></a>
-</p>
+  <p>
+    <a href="README.md">🇬🇧 English</a> •
+    <a href="README.de.md">🇩🇪 Deutsch</a> •
+    <a href="README.es.md">🇪🇸 Español</a> •
+    <a href="README.fr.md">🇫🇷 Français</a> •
+    <a href="README.hi.md">🇮🇳 हिंदी</a> •
+    <a href="README.bn.md">🇮🇳 বাংলা</a> •
+    <a href="README.zh.md">🇨🇳 中文</a> •
+    <a href="README.nl.md">🇳🇱 Nederlands</a> •
+    <a href="README.ta.md">🇮🇳 தமிழ்</a>
+  </p>
 
-<br/>
+  <p>
+    <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
+    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12+-blue.svg" alt="Python Version"></a>
+    <a href="https://pypi.org/project/bindu/"><img src="https://img.shields.io/pypi/v/bindu.svg" alt="PyPI version"></a>
+    <a href="https://coveralls.io/github/Saptha-me/Bindu?branch=v0.3.18"><img src="https://coveralls.io/repos/github/Saptha-me/Bindu/badge.svg?branch=v0.3.18" alt="Coverage"></a>
+    <a href="https://github.com/getbindu/Bindu/actions/workflows/release.yml"><img src="https://github.com/getbindu/Bindu/actions/workflows/release.yml/badge.svg" alt="Tests"></a>
+    <a href="https://discord.gg/3w5zuYUuwt"><img src="https://img.shields.io/badge/Join%20Discord-7289DA?logo=discord&logoColor=white" alt="Discord"></a>
+    <a href="https://github.com/getbindu/Bindu/graphs/contributors"><img src="https://img.shields.io/github/contributors/getbindu/Bindu" alt="Contributors"></a>
+    <a href="https://hits.sh/github.com/Saptha-me/Bindu.svg"><img src="https://hits.sh/github.com/Saptha-me/Bindu.svg" alt="Hits"></a>
+  </p>
 
-<p align="center">
-  <img src="assets/sunflower-mountains.jpeg" alt="Bindu — The Internet of Agents" width="720" />
-</p>
+  <br/>
 
-<p align="center">
-  <em>"Like sunflowers turning toward the light, agents collaborate in swarms - each one independent, yet together they create something greater."</em>
-</p>
+  <video src="https://github.com/GetBindu/Bindu/raw/main/assets/bindu_landscape.mp4" autoplay loop muted playsinline width="820">
+    <img src="assets/sunflower-mountains.jpeg" alt="Bindu — The Internet of Agents" width="820" />
+  </video>
 
-<br/>
+  <p>
+    <em>"Like sunflowers turning toward the light, agents collaborate in swarms —<br/>each one independent, yet together they create something greater."</em>
+  </p>
 
-<div align="center">
+  <br/>
+
   <h3>Onboard your agent in one line</h3>
-</div>
 
-<div align="center">
   <pre><code>curl -fsSL https://getbindu.com/install-bindu.sh | bash</code></pre>
+
+  <p>
+    <a href="https://getbindu.com"><strong>🌟 Register your agent</strong></a> •
+    <a href="https://docs.getbindu.com"><strong>🌻 Documentation</strong></a> •
+    <a href="https://discord.gg/3w5zuYUuwt"><strong>💬 Discord</strong></a>
+  </p>
 </div>
 
 ---
@@ -58,11 +60,6 @@
 **Bindu** (read: _binduu_) turns any AI agent into a production microservice. Build your agent in any framework — Agno, LangChain, OpenAI SDK, even plain TypeScript — call `bindufy()`, and get a service with DID identity, A2A protocol, OAuth2 auth, and crypto payments. No infrastructure code. No rewriting.
 
 Works with Python, TypeScript, and Kotlin. Built on open protocols: **A2A**, **AP2**, and **X402**.
-
-<p align="center">
-  <strong>🌟 <a href="https://getbindu.com">Register your agent</a> • 🌻 <a href="https://docs.getbindu.com">Documentation</a> • 💬 <a href="https://discord.gg/3w5zuYUuwt">Discord Community</a></strong>
-</p>
-
 
 ---
 

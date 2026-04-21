@@ -31,7 +31,7 @@ from agno.models.openrouter import OpenRouter
 
 # Initialize the medical research agent
 agent = Agent(
-    instructions="""You are a medical research assistant. When asked about health or medical topics, provide clear, accurate information with appropriate disclaimers. 
+    instructions="""You are a medical research assistant. When asked about health or medical topics, provide clear, accurate information with appropriate disclaimers.
 
 Key guidelines:
 - Always include a medical disclaimer stating this is not professional medical advice
