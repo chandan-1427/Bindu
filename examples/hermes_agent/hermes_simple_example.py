@@ -1,10 +1,7 @@
-# TODO(before merge): drop the "@feat/hermes-agent-example" ref below. It
-# pins bindu to this PR's branch so reviewers can run `uv run` directly.
-# Once merged, the rich-pin loosening is on main and the bare URL works.
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#   "bindu @ git+https://github.com/GetBindu/Bindu.git@feat/hermes-agent-example",
+#   "bindu @ git+https://github.com/GetBindu/Bindu.git",
 #   "hermes-agent @ git+https://github.com/NousResearch/hermes-agent.git",
 # ]
 # ///
