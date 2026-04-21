@@ -1,13 +1,20 @@
+<p align="center">
+  <img src="assets/bindu_landscape.png" alt="Bindu — humans and agents, side by side" width="100%">
+</p>
+
+<div align="center">
+
+<picture>
+  <img alt="Bindu" src="assets/bindu_logo.png" width="50">
+</picture>
+
+# Bindu
+
+**The identity, communication & payments layer for AI agents.**
+
+
+
 <div align="center" id="top">
-  <a href="https://getbindu.com">
-    <img src="assets/bindu_logo.png" alt="Bindu" width="180" />
-  </a>
-
-  <h1>Bindu</h1>
-
-  <p>
-    <strong>The identity, communication & payments layer for AI agents.</strong>
-  </p>
 
   <p>
     <a href="README.md">🇬🇧 English</a> •
@@ -30,16 +37,6 @@
     <a href="https://discord.gg/3w5zuYUuwt"><img src="https://img.shields.io/badge/Join%20Discord-7289DA?logo=discord&logoColor=white" alt="Discord"></a>
     <a href="https://github.com/getbindu/Bindu/graphs/contributors"><img src="https://img.shields.io/github/contributors/getbindu/Bindu" alt="Contributors"></a>
     <a href="https://hits.sh/github.com/Saptha-me/Bindu.svg"><img src="https://hits.sh/github.com/Saptha-me/Bindu.svg" alt="Hits"></a>
-  </p>
-
-  <br/>
-
-  <video src="https://github.com/user-attachments/assets/aa156fb6-737d-4441-bdec-2a556e23759f" autoplay loop muted playsinline width="820">
-    <img src="assets/sunflower-mountains.jpeg" alt="Bindu — The Internet of Agents" width="820" />
-  </video>
-
-  <p>
-    <em>"Like sunflowers turning toward the light, agents collaborate in swarms —<br/>each one independent, yet together they create something greater."</em>
   </p>
 
   <br/>
