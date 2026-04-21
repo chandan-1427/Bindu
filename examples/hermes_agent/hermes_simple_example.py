@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#   "bindu @ git+https://github.com/GetBindu/Bindu.git",
+#   "hermes-agent @ git+https://github.com/NousResearch/hermes-agent.git",
+# ]
+# ///
 """Hermes-Agent via Bindu.
 
 Runs hermes-agent's ``AIAgent`` — a full tool-using coding/research agent —
@@ -8,11 +15,14 @@ This example is self-contained: it does not depend on any add-on module.
 Only the two packages listed below need to be installed.
 
 Setup (Python 3.12+):
-    uv pip install bindu \\
-        "hermes-agent @ git+https://github.com/NousResearch/hermes-agent.git"
     cp .env.example .env && $EDITOR .env      # set OPENROUTER_API_KEY
 
-Run:
+Run (one command — uv reads the PEP 723 header and installs deps on demand):
+    uv run hermes_simple_example.py
+
+Or, for a persistent install:
+    uv pip install bindu \\
+        "hermes-agent @ git+https://github.com/NousResearch/hermes-agent.git"
     python hermes_simple_example.py
 
 Tiers (``HERMES_TIER`` env var) control which Hermes toolsets are exposed:
