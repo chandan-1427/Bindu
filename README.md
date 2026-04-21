@@ -34,7 +34,7 @@
 
   <br/>
 
-  <video src="https://github.com/GetBindu/Bindu/raw/main/assets/bindu_landscape.mp4" autoplay loop muted playsinline width="820">
+  <video src="https://github.com/user-attachments/assets/aa156fb6-737d-4441-bdec-2a556e23759f" autoplay loop muted playsinline width="820">
     <img src="assets/sunflower-mountains.jpeg" alt="Bindu — The Internet of Agents" width="820" />
   </video>
 
