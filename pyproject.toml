@@ -29,7 +29,7 @@ dependencies = [
     "httpx==0.28.1",
     "aiofiles==24.1.0",
     "pyyaml==6.0.2",
-    "requests==2.32.3",
+    "requests>=2.32.3,<3",
     "tenacity==9.1.4",
     "pynacl==1.5.0",
     "numpy==2.3.5",
@@ -106,7 +106,7 @@ core = [
     "httpx==0.28.1",
     "aiofiles==24.1.0",
     "pyyaml==6.0.2",
-    "requests==2.32.3",
+    "requests>=2.32.3,<3",
     "tenacity==9.1.4",
     "pynacl==1.5.0",
 ]
