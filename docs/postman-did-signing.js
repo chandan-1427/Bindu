@@ -145,7 +145,7 @@ async function ed25519Sign(seed, message) {
 }
 
 function base58Encode(bytes) {
-  const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"; // pragma: allowlist secret
   if (bytes.length === 0) return "";
 
   // Leading zero bytes map to leading "1"s by base58 convention.
