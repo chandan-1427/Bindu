@@ -4,17 +4,20 @@
 
 <div align="center">
 
-<img alt="Bindu" src="assets/bindu_logo.png" width="50">
+<img alt="Bindu" src="assets/bindu_logo.png" width="80">
 
 # Bindu
 
-**The identity, communication, and payments layer for AI agents.**
+### The identity, communication, and payments layer for AI agents.
 
 </div>
 
-Bindu turns any AI agent into a production microservice. Write the agent in any framework — Agno, LangChain, OpenAI SDK, CrewAI, LangGraph, plain TypeScript — wrap it with one `bindufy()` call, and get an HTTP service with a cryptographic DID, the A2A protocol, OAuth2 auth, and on-chain payments. No infrastructure code. No rewriting.
+<br>
 
-Works from Python, TypeScript, and Kotlin. Built on three open protocols: [A2A](https://github.com/a2aproject/A2A), [AP2](https://github.com/google-agentic-commerce/AP2), and [x402](https://github.com/coinbase/x402).
+> **Write your agent in any framework. Wrap it with `bindufy()`.**
+> **Ship a signed A2A microservice — identity, OAuth2, and on-chain payments — in ten lines of code.**
+
+No infrastructure to write. No framework to rewrite. Works from Python, TypeScript, and Kotlin, and layered on three open protocols: [A2A](https://github.com/a2aproject/A2A), [AP2](https://github.com/google-agentic-commerce/AP2), and [x402](https://github.com/coinbase/x402).
 
 <div align="center">
 
@@ -52,16 +55,34 @@ Works from Python, TypeScript, and Kotlin. Built on three open protocols: [A2A](
 
 ## What you get
 
-When you wrap an agent with `bindufy(config, handler)`, the process comes up with:
+When you wrap a handler with `bindufy(config, handler)`, the process comes up speaking standard protocols, signing every response, and ready to take payment. Grouped by what it does for you:
 
-| Capability | What it means in practice |
+<br>
+
+**Protocol — talk to the world**
+
+| Capability | What it means |
 |---|---|
 | A2A JSON-RPC endpoint | Standard protocol other agents already speak. `message/send`, `tasks/get`, `message/stream` on port 3773. |
-| DID identity (Ed25519) | Every returned artifact is signed. Callers verify authenticity with a W3C-standard DID — no shared secrets. |
-| OAuth2 via Ory Hydra | Scoped tokens (`agent:read`, `agent:write`, `agent:execute`) instead of one all-or-nothing bearer. |
-| x402 payments | One flag and the agent charges USDC on Base before processing a request. Payment check runs before the handler. |
-| Push notifications | Webhook callbacks on task state change. No polling required. |
+| Push notifications | Webhook callbacks on task state change — no polling required. |
 | Language-agnostic | Python, TypeScript, and Kotlin SDKs share one gRPC core. Same protocol, same DID, same auth. |
+
+<br>
+
+**Identity & access — prove who's calling**
+
+| Capability | What it means |
+|---|---|
+| DID identity (Ed25519) | Every returned artifact is signed. Callers verify with a W3C-standard DID — no shared secrets. |
+| OAuth2 via Ory Hydra | Scoped tokens (`agent:read`, `agent:write`, `agent:execute`) instead of one all-or-nothing bearer. |
+
+<br>
+
+**Commerce & reach — get paid and be reachable**
+
+| Capability | What it means |
+|---|---|
+| x402 payments | One flag and the agent charges USDC on Base before processing a request. Payment check runs before your handler. |
 | Public tunnel | `expose: true` opens an FRP tunnel so your local agent is reachable from the public internet. |
 
 ---
@@ -86,7 +107,7 @@ Requires Python 3.12+ and [uv](https://github.com/astral-sh/uv). An API key for 
 
 ## Hello agent
 
-A complete working agent, built with Agno, exposed as an A2A microservice:
+The whole idea of Bindu shows up clearly in one file — build any agent you like, hand it to `bindufy()`, and your process comes up as a signed A2A microservice. The block below is complete and runnable.
 
 ```python
 import os
@@ -95,12 +116,16 @@ from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 from agno.tools.duckduckgo import DuckDuckGoTools
 
+# 1. Build your agent with whatever framework you prefer. Bindu doesn't
+#    care what's inside — it just needs something callable.
 agent = Agent(
     instructions="You are a research assistant that finds and summarizes information.",
     model=OpenAIChat(id="gpt-4o"),
     tools=[DuckDuckGoTools()],
 )
 
+# 2. Tell Bindu who you are and where the agent lives. `expose: True`
+#    opens a public FRP tunnel — drop it for local-only.
 config = {
     "author": "you@example.com",
     "name": "research_agent",
@@ -112,13 +137,16 @@ config = {
     "skills": ["skills/question-answering"],
 }
 
+# 3. The handler contract: (messages) -> response. That's it.
 def handler(messages: list[dict[str, str]]):
     return agent.run(input=messages)
 
+# 4. bindufy() boots the HTTP server, mints your DID, registers with
+#    Hydra (if auth is on), and starts accepting A2A calls.
 bindufy(config, handler)
 ```
 
-Run it, and your agent is live at the configured URL. Override the port without editing code with `BINDU_PORT=4000`.
+Run it, and the agent is live at the configured URL. Need a different port? Export `BINDU_PORT=4000` — no code change.
 
 <p align="center">
   <img src="assets/agno-simple.png" alt="A bindufied Agno agent running on port 3773" width="780" />
@@ -183,6 +211,8 @@ Poll `tasks/get` with the same `taskId` until state is `completed`. The returned
 
 ## How it fits
 
+So what actually happens when that `bindufy()` call executes? The handler is the only code you write. Everything else is scaffolding Bindu puts around it:
+
 ```
 your handler  ──►  bindufy(config, handler)
                           │
@@ -204,6 +234,8 @@ your handler  ──►  bindufy(config, handler)
 ---
 
 ## Calling a secured agent
+
+> **TL;DR** — when `AUTH__ENABLED=true`, every call needs a Hydra bearer token *and* three `X-DID-*` headers. Python client: ~25 lines, [below](#step-2--pick-your-client). Postman: paste one script. The rest of this section unpacks why and how, and what goes wrong when it goes wrong.
 
 The `curl` example in *Hello agent* works because auth is off by default — anyone can POST to your agent. The moment you flip `AUTH__ENABLED=true AUTH__PROVIDER=hydra`, your agent gets stricter. Every caller now has to answer two questions before the handler runs:
 
@@ -380,7 +412,7 @@ For a runnable multi-agent demo, see [`examples/gateway_test_fleet/`](examples/g
 
 ## Supported frameworks and examples
 
-Bindu is framework-agnostic. Bring whichever agent framework you already like — we tested the ones below end-to-end and they all work the same way: you hand Bindu a handler, it gives you a signed A2A microservice.
+Bring whichever agent framework you already like. You hand Bindu a handler; it gives you a signed A2A microservice. Same flow regardless of what's inside the handler.
 
 <br>
 
@@ -431,23 +463,48 @@ A built-in chat UI is available at `http://localhost:5173` after running `cd fro
 
 ## Core features
 
-Each of these has a dedicated guide in [`docs/`](docs/). They're optional and modular — the minimal install is just the A2A server.
+Everything below is optional and modular — the minimal install is just the A2A server. Each row links to a dedicated guide in [`docs/`](docs/).
+
+<br>
+
+**Identity & access**
 
 | Feature | Guide |
 |---|---|
+| Decentralized Identifiers (DIDs) | [DID.md](docs/DID.md) |
 | Authentication (Ory Hydra OAuth2) | [AUTHENTICATION.md](docs/AUTHENTICATION.md) |
-| x402 payments (USDC on Base) | [PAYMENT.md](docs/PAYMENT.md) |
-| PostgreSQL storage | [STORAGE.md](docs/STORAGE.md) |
-| Redis scheduler | [SCHEDULER.md](docs/SCHEDULER.md) |
+
+<br>
+
+**Protocol & infrastructure**
+
+| Feature | Guide |
+|---|---|
 | Skills system | [SKILLS.md](docs/SKILLS.md) |
 | Agent negotiation | [NEGOTIATION.md](docs/NEGOTIATION.md) |
-| Tunneling (local dev only) | [TUNNELING.md](docs/TUNNELING.md) |
 | Push notifications | [NOTIFICATIONS.md](docs/NOTIFICATIONS.md) |
-| Observability (OpenTelemetry, Sentry) | [OBSERVABILITY.md](docs/OBSERVABILITY.md) |
-| Retry with exponential backoff | [Retry docs](https://docs.getbindu.com/bindu/learn/retry/overview) |
-| Decentralized Identifiers (DIDs) | [DID.md](docs/DID.md) |
-| Health check and metrics | [HEALTH_METRICS.md](docs/HEALTH_METRICS.md) |
+| PostgreSQL storage | [STORAGE.md](docs/STORAGE.md) |
+| Redis scheduler | [SCHEDULER.md](docs/SCHEDULER.md) |
 | Language-agnostic via gRPC | [GRPC_LANGUAGE_AGNOSTIC.md](docs/GRPC_LANGUAGE_AGNOSTIC.md) |
+
+<br>
+
+**Commerce & reach**
+
+| Feature | Guide |
+|---|---|
+| x402 payments (USDC on Base) | [PAYMENT.md](docs/PAYMENT.md) |
+| Tunneling (local dev only) | [TUNNELING.md](docs/TUNNELING.md) |
+
+<br>
+
+**Reliability & operations**
+
+| Feature | Guide |
+|---|---|
+| Retry with exponential backoff | [Retry docs](https://docs.getbindu.com/bindu/learn/retry/overview) |
+| Observability (OpenTelemetry, Sentry) | [OBSERVABILITY.md](docs/OBSERVABILITY.md) |
+| Health check and metrics | [HEALTH_METRICS.md](docs/HEALTH_METRICS.md) |
 
 ---
 
@@ -559,5 +616,8 @@ Apache 2.0. See [LICENSE.md](LICENSE.md).
 </p>
 
 <p align="center">
-  <sub>Built in Amsterdam and India.</sub>
+  <sub>
+    Crafted between Amsterdam and India · open source under Apache 2.0 ·
+    <a href="https://getbindu.com">getbindu.com</a>
+  </sub>
 </p>
