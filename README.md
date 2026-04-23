@@ -203,23 +203,113 @@ your handler  ──►  bindufy(config, handler)
 
 ---
 
+## Gateway — multi-agent orchestration
+
+A single `bindufy()`-wrapped agent is a microservice. The **Bindu Gateway** is a task-first orchestrator that sits on top: give it a user question and a catalog of A2A agents, and a planner LLM decomposes the work, calls the right agents over A2A, and streams results back as Server-Sent Events. No DAG engine, no separate orchestrator service — the planner's LLM picks tools per turn.
+
+What you get beyond a single agent:
+
+- **One endpoint: `POST /plan`** — hand it a question and an agent catalog, get streamed steps.
+- **Agent catalog per request** — external systems pass the list of agents, skills, and endpoints. No fleet hosting in the gateway itself.
+- **Session persistence (Supabase)** — Postgres-backed with compaction, revert, and multi-turn history.
+- **Native TypeScript A2A** — no Python subprocess, no `@bindu/sdk` dependency in the gateway.
+- **Optional DID signing + Hydra integration** — gateway identity end-to-end.
+
+Minimal quickstart:
+
+```bash
+cd gateway
+npm install
+cp .env.example .env.local         # fill SUPABASE_*, GATEWAY_API_KEY, OPENROUTER_API_KEY
+npm run dev                        # → http://localhost:3774
+curl -sS http://localhost:3774/health
+```
+
+Apply the two Supabase migrations first (`gateway/migrations/001_init.sql`, `002_compaction_revert.sql`). Full walkthrough and operator reference live in [`gateway/README.md`](gateway/README.md) and [`docs/GATEWAY.md`](docs/GATEWAY.md) (45-minute end-to-end: clean clone → three chained agents → authoring a recipe → DID signing).
+
+Gateway documentation:
+
+| Topic | Link |
+|---|---|
+| Overview | [docs.getbindu.com/bindu/gateway/overview](https://docs.getbindu.com/bindu/gateway/overview) |
+| Quickstart | [docs.getbindu.com/bindu/gateway/quickstart](https://docs.getbindu.com/bindu/gateway/quickstart) |
+| Multi-agent planning | [docs.getbindu.com/bindu/gateway/multi-agent](https://docs.getbindu.com/bindu/gateway/multi-agent) |
+| Recipes (progressive-disclosure playbooks) | [docs.getbindu.com/bindu/gateway/recipes](https://docs.getbindu.com/bindu/gateway/recipes) |
+| Identity (DID signing, Hydra) | [docs.getbindu.com/bindu/gateway/identity](https://docs.getbindu.com/bindu/gateway/identity) |
+| Production deployment | [docs.getbindu.com/bindu/gateway/production](https://docs.getbindu.com/bindu/gateway/production) |
+| API reference | [docs.getbindu.com/api/introduction](https://docs.getbindu.com/api/introduction) |
+
+For a runnable multi-agent demo, see [`examples/gateway_test_fleet/`](examples/gateway_test_fleet/) — five small agents on local ports, one gateway, one query.
+
+---
+
 ## Supported frameworks and examples
 
 Bindu is framework-agnostic. Every framework below is tested end-to-end with a runnable agent in this repo.
 
-| Language | Framework | What it is | Examples |
-|---|---|---|---|
-| Python | **[AG2](https://github.com/ag2ai/ag2)** ![stars](https://img.shields.io/github/stars/ag2ai/ag2?style=social) | Multi-agent collaboration | [AG2 Research Team](examples/ag2_research_team/) |
-| Python | **[Agno](https://github.com/agno-agi/agno)** ![stars](https://img.shields.io/github/stars/agno-agi/agno?style=social) | Production-ready agent framework | [Agent Swarm](examples/agent_swarm/) · [AI Data Analysis](examples/ai-data-analysis-agent/) · [Beginner examples](examples/beginner/) · [Cybersecurity Newsletter](examples/cybersecurity-newsletter/) · [Medical Agent](examples/medical_agent/) · [News Summarizer](examples/news-summarizer/) · [Premium Advisor (x402)](examples/premium-advisor/) · [Speech-to-Text](examples/speech-to-text/) · [Summarizer](examples/summarizer/) · [Weather Research](examples/weather-research/) · [Web Scraping](examples/web-scraping-agent/) · [Multilingual Collab](examples/multilingual-collab-agent/) · [Gateway Test Fleet](examples/gateway_test_fleet/) |
-| Python | **[CrewAI](https://github.com/joaomdmoura/crewAI)** ![stars](https://img.shields.io/github/stars/joaomdmoura/crewAI?style=social) | Role-based multi-agent orchestration | [Cerina CBT Agent](examples/cerina_bindu/) |
-| Python | **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** ![stars](https://img.shields.io/github/stars/NousResearch/hermes-agent?style=social) | Nous Research's tool-using coding and research agent | [Hermes via Bindu](examples/hermes_agent/) |
-| Python | **[LangChain](https://github.com/langchain-ai/langchain)** ![stars](https://img.shields.io/github/stars/langchain-ai/langchain?style=social) | Build applications with LLMs | [Document Analyzer](examples/document-analyzer/) · [PDF Research Agent](examples/pdf_research_agent/) |
-| Python | **[LangGraph](https://github.com/langchain-ai/langgraph)** ![stars](https://img.shields.io/github/stars/langchain-ai/langgraph?style=social) | Stateful multi-agent workflows | [Blog Writing Agent](examples/langgraph_blog_writing_agent/) |
-| Python | **[Notte](https://github.com/nottelabs/notte)** ![stars](https://img.shields.io/github/stars/nottelabs/notte?style=social) | Real browser automation for agents | [Notte Browser Agent](examples/notte-browser-agent/) |
-| TypeScript | **[OpenAI SDK](https://github.com/openai/openai-node)** ![stars](https://img.shields.io/github/stars/openai/openai-node?style=social) | Official OpenAI Node.js library | [TypeScript OpenAI Agent](examples/typescript-openai-agent/) |
-| TypeScript | **[LangChain.js](https://github.com/langchain-ai/langchainjs)** ![stars](https://img.shields.io/github/stars/langchain-ai/langchainjs?style=social) | LangChain for JS/TS | [TypeScript LangChain Agent](examples/typescript-langchain-agent/) · [Quiz Agent](examples/typescript-langchain-quiz-agent/) |
-| Kotlin | **[OpenAI Kotlin SDK](https://github.com/aallam/openai-kotlin)** ![stars](https://img.shields.io/github/stars/aallam/openai-kotlin?style=social) | OpenAI API client for Kotlin | [Kotlin OpenAI Agent](examples/kotlin-openai-agent/) |
-| Any | gRPC core | Language-agnostic handler over gRPC — see [`docs/grpc/`](docs/grpc/) for how to add a new SDK | — |
+### Python
+
+**[AG2](https://github.com/ag2ai/ag2)** ![stars](https://img.shields.io/github/stars/ag2ai/ag2?style=social) — multi-agent collaboration (formerly AutoGen).
+
+- [AG2 Research Team](examples/ag2_research_team/) — multi-agent research pipeline with planner, researchers, and editor.
+
+**[Agno](https://github.com/agno-agi/agno)** ![stars](https://img.shields.io/github/stars/agno-agi/agno?style=social) — production-ready agent framework with tools, reasoning, and memory.
+
+- [Agent Swarm](examples/agent_swarm/) — building a living society of collaborating agents.
+- [AI Data Analysis](examples/ai-data-analysis-agent/) — autonomous analyst that ingests CSVs, computes stats, and visualizes findings.
+- [Beginner examples](examples/beginner/) — bite-sized agents for learning Bindu.
+- [Cybersecurity Newsletter](examples/cybersecurity-newsletter/) — researches CVEs and drafts a newsletter section.
+- [Medical Agent](examples/medical_agent/) — health information and symptom guidance with search.
+- [News Summarizer](examples/news-summarizer/) — searches and summarizes latest news on any topic.
+- [Premium Advisor](examples/premium-advisor/) — x402-gated agent: callers pay USDC before the handler runs.
+- [Speech-to-Text](examples/speech-to-text/) — multimodal agent transcribing real audio (MP3, WAV, OGG, M4A) via Gemini 2.0 Flash.
+- [Summarizer](examples/summarizer/) — concise text summaries via `openai/gpt-oss` on OpenRouter.
+- [Weather Research](examples/weather-research/) — location-aware weather information with search.
+- [Web Scraping](examples/web-scraping-agent/) — crawls pages, extracts structured data, formats output.
+- [Multilingual Collab](examples/multilingual-collab-agent/) — detects caller language, collaborates identity-aware.
+- [Gateway Test Fleet](examples/gateway_test_fleet/) — five small agents for exercising the Bindu Gateway end-to-end.
+
+**[CrewAI](https://github.com/joaomdmoura/crewAI)** ![stars](https://img.shields.io/github/stars/joaomdmoura/crewAI?style=social) — role-based multi-agent orchestration.
+
+- [Cerina CBT Agent](examples/cerina_bindu/) — CBT therapy protocol generator.
+
+**[Hermes Agent](https://github.com/NousResearch/hermes-agent)** ![stars](https://img.shields.io/github/stars/NousResearch/hermes-agent?style=social) — Nous Research's tool-using coding and research agent.
+
+- [Hermes via Bindu](examples/hermes_agent/) — Hermes' `AIAgent` exposed as a signed A2A microservice.
+
+**[LangChain](https://github.com/langchain-ai/langchain)** ![stars](https://img.shields.io/github/stars/langchain-ai/langchain?style=social) — build applications with LLMs.
+
+- [Document Analyzer](examples/document-analyzer/) — PDF/DOCX ingestion + Q&A.
+- [PDF Research Agent](examples/pdf_research_agent/) — retrieval-augmented research over long PDFs.
+
+**[LangGraph](https://github.com/langchain-ai/langgraph)** ![stars](https://img.shields.io/github/stars/langchain-ai/langgraph?style=social) — stateful multi-agent workflows.
+
+- [Blog Writing Agent](examples/langgraph_blog_writing_agent/) — map-reduce technical blog post writer.
+
+**[Notte](https://github.com/nottelabs/notte)** ![stars](https://img.shields.io/github/stars/nottelabs/notte?style=social) — real browser automation for agents.
+
+- [Notte Browser Agent](examples/notte-browser-agent/) — navigate JavaScript-rendered pages, fill forms, extract data.
+
+### TypeScript
+
+**[OpenAI SDK](https://github.com/openai/openai-node)** ![stars](https://img.shields.io/github/stars/openai/openai-node?style=social) — official OpenAI Node.js library.
+
+- [TypeScript OpenAI Agent](examples/typescript-openai-agent/) — general-purpose assistant bindufied via the Bindu TypeScript SDK.
+
+**[LangChain.js](https://github.com/langchain-ai/langchainjs)** ![stars](https://img.shields.io/github/stars/langchain-ai/langchainjs?style=social) — LangChain for JS/TS.
+
+- [TypeScript LangChain Agent](examples/typescript-langchain-agent/) — research assistant with LangChain tools.
+- [Quiz Agent](examples/typescript-langchain-quiz-agent/) — quiz generator specialist.
+
+### Kotlin
+
+**[OpenAI Kotlin SDK](https://github.com/aallam/openai-kotlin)** ![stars](https://img.shields.io/github/stars/aallam/openai-kotlin?style=social) — OpenAI API client for Kotlin.
+
+- [Kotlin OpenAI Agent](examples/kotlin-openai-agent/) — assistant built with Kotlin and the Bindu Kotlin SDK.
+
+### Any other language
+
+Bindu is language-agnostic via gRPC — the core runs in Python, your handler can be in any language that speaks gRPC. See [`docs/grpc/`](docs/grpc/) for how it works and how to add a new SDK.
 
 ### Compatible LLM providers
 
