@@ -207,45 +207,19 @@ your handler  ──►  bindufy(config, handler)
 
 Bindu is framework-agnostic. Every framework below is tested end-to-end with a runnable agent in this repo.
 
-### Python
-
-- **[AG2](https://github.com/ag2ai/ag2)** ![GitHub stars](https://img.shields.io/github/stars/ag2ai/ag2?style=social) — multi-agent collaboration.
-  - [AG2 Research Team](examples/ag2_research_team/)
-
-- **[Agno](https://github.com/agno-agi/agno)** ![GitHub stars](https://img.shields.io/github/stars/agno-agi/agno?style=social) — production-ready agent framework.
-  - [Agent Swarm](examples/agent_swarm/) · [AI Data Analysis](examples/ai-data-analysis-agent/) · [Beginner examples](examples/beginner/) · [Cybersecurity Newsletter](examples/cybersecurity-newsletter/) · [Medical Agent](examples/medical_agent/) · [News Summarizer](examples/news-summarizer/) · [Premium Advisor (x402 payments)](examples/premium-advisor/) · [Speech-to-Text](examples/speech-to-text/) · [Summarizer](examples/summarizer/) · [Weather Research](examples/weather-research/) · [Web Scraping](examples/web-scraping-agent/) · [Multilingual Collab](examples/multilingual-collab-agent/) · [Gateway Test Fleet](examples/gateway_test_fleet/)
-
-- **[CrewAI](https://github.com/joaomdmoura/crewAI)** ![GitHub stars](https://img.shields.io/github/stars/joaomdmoura/crewAI?style=social) — role-based multi-agent orchestration.
-  - [Cerina CBT Agent](examples/cerina_bindu/)
-
-- **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** ![GitHub stars](https://img.shields.io/github/stars/NousResearch/hermes-agent?style=social) — Nous Research's tool-using coding and research agent.
-  - [Hermes via Bindu](examples/hermes_agent/)
-
-- **[LangChain](https://github.com/langchain-ai/langchain)** ![GitHub stars](https://img.shields.io/github/stars/langchain-ai/langchain?style=social) — build applications with LLMs.
-  - [Document Analyzer](examples/document-analyzer/) · [PDF Research Agent](examples/pdf_research_agent/)
-
-- **[LangGraph](https://github.com/langchain-ai/langgraph)** ![GitHub stars](https://img.shields.io/github/stars/langchain-ai/langgraph?style=social) — stateful multi-agent workflows.
-  - [Blog Writing Agent](examples/langgraph_blog_writing_agent/)
-
-- **[Notte](https://github.com/nottelabs/notte)** ![GitHub stars](https://img.shields.io/github/stars/nottelabs/notte?style=social) — real browser automation for agents.
-  - [Notte Browser Agent](examples/notte-browser-agent/)
-
-### TypeScript
-
-- **[OpenAI SDK](https://github.com/openai/openai-node)** ![GitHub stars](https://img.shields.io/github/stars/openai/openai-node?style=social)
-  - [TypeScript OpenAI Agent](examples/typescript-openai-agent/)
-
-- **[LangChain.js](https://github.com/langchain-ai/langchainjs)** ![GitHub stars](https://img.shields.io/github/stars/langchain-ai/langchainjs?style=social)
-  - [TypeScript LangChain Agent](examples/typescript-langchain-agent/) · [Quiz Agent](examples/typescript-langchain-quiz-agent/)
-
-### Kotlin
-
-- **[OpenAI Kotlin SDK](https://github.com/aallam/openai-kotlin)** ![GitHub stars](https://img.shields.io/github/stars/aallam/openai-kotlin?style=social)
-  - [Kotlin OpenAI Agent](examples/kotlin-openai-agent/)
-
-### Any other language
-
-Bindu is language-agnostic via gRPC — the core runs in Python, your handler can be in any language that speaks gRPC. See [`docs/grpc/`](docs/grpc/) for how it works and how to add a new SDK.
+| Language | Framework | What it is | Examples |
+|---|---|---|---|
+| Python | **[AG2](https://github.com/ag2ai/ag2)** ![stars](https://img.shields.io/github/stars/ag2ai/ag2?style=social) | Multi-agent collaboration | [AG2 Research Team](examples/ag2_research_team/) |
+| Python | **[Agno](https://github.com/agno-agi/agno)** ![stars](https://img.shields.io/github/stars/agno-agi/agno?style=social) | Production-ready agent framework | [Agent Swarm](examples/agent_swarm/) · [AI Data Analysis](examples/ai-data-analysis-agent/) · [Beginner examples](examples/beginner/) · [Cybersecurity Newsletter](examples/cybersecurity-newsletter/) · [Medical Agent](examples/medical_agent/) · [News Summarizer](examples/news-summarizer/) · [Premium Advisor (x402)](examples/premium-advisor/) · [Speech-to-Text](examples/speech-to-text/) · [Summarizer](examples/summarizer/) · [Weather Research](examples/weather-research/) · [Web Scraping](examples/web-scraping-agent/) · [Multilingual Collab](examples/multilingual-collab-agent/) · [Gateway Test Fleet](examples/gateway_test_fleet/) |
+| Python | **[CrewAI](https://github.com/joaomdmoura/crewAI)** ![stars](https://img.shields.io/github/stars/joaomdmoura/crewAI?style=social) | Role-based multi-agent orchestration | [Cerina CBT Agent](examples/cerina_bindu/) |
+| Python | **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** ![stars](https://img.shields.io/github/stars/NousResearch/hermes-agent?style=social) | Nous Research's tool-using coding and research agent | [Hermes via Bindu](examples/hermes_agent/) |
+| Python | **[LangChain](https://github.com/langchain-ai/langchain)** ![stars](https://img.shields.io/github/stars/langchain-ai/langchain?style=social) | Build applications with LLMs | [Document Analyzer](examples/document-analyzer/) · [PDF Research Agent](examples/pdf_research_agent/) |
+| Python | **[LangGraph](https://github.com/langchain-ai/langgraph)** ![stars](https://img.shields.io/github/stars/langchain-ai/langgraph?style=social) | Stateful multi-agent workflows | [Blog Writing Agent](examples/langgraph_blog_writing_agent/) |
+| Python | **[Notte](https://github.com/nottelabs/notte)** ![stars](https://img.shields.io/github/stars/nottelabs/notte?style=social) | Real browser automation for agents | [Notte Browser Agent](examples/notte-browser-agent/) |
+| TypeScript | **[OpenAI SDK](https://github.com/openai/openai-node)** ![stars](https://img.shields.io/github/stars/openai/openai-node?style=social) | Official OpenAI Node.js library | [TypeScript OpenAI Agent](examples/typescript-openai-agent/) |
+| TypeScript | **[LangChain.js](https://github.com/langchain-ai/langchainjs)** ![stars](https://img.shields.io/github/stars/langchain-ai/langchainjs?style=social) | LangChain for JS/TS | [TypeScript LangChain Agent](examples/typescript-langchain-agent/) · [Quiz Agent](examples/typescript-langchain-quiz-agent/) |
+| Kotlin | **[OpenAI Kotlin SDK](https://github.com/aallam/openai-kotlin)** ![stars](https://img.shields.io/github/stars/aallam/openai-kotlin?style=social) | OpenAI API client for Kotlin | [Kotlin OpenAI Agent](examples/kotlin-openai-agent/) |
+| Any | gRPC core | Language-agnostic handler over gRPC — see [`docs/grpc/`](docs/grpc/) for how to add a new SDK | — |
 
 ### Compatible LLM providers
 
