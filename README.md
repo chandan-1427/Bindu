@@ -52,6 +52,8 @@
   </p>
 </div>
 
+</div>
+
 ---
 
 **Bindu** (read: _binduu_) turns any AI agent into a production microservice. Build your agent in any framework — Agno, LangChain, OpenAI SDK, even plain TypeScript — call `bindufy()`, and get a service with DID identity, A2A protocol, OAuth2 auth, and crypto payments. No infrastructure code. No rewriting.
