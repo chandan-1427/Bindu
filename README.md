@@ -203,6 +203,141 @@ your handler  ──►  bindufy(config, handler)
 
 ---
 
+## Calling a secured agent
+
+The `curl` example in *Hello agent* works because auth is off by default — anyone can POST to your agent. The moment you flip `AUTH__ENABLED=true AUTH__PROVIDER=hydra`, your agent gets stricter. Every caller now has to answer two questions before the handler runs:
+
+1. **Are you allowed to call me?** — show a valid OAuth2 token from Hydra.
+2. **Are you really who you say you are?** — sign the request with a DID key.
+
+Think of it like boarding a flight: the boarding pass (OAuth token) says "yes, you have a seat on this flight," and the passport (DID signature) says "and you really are the person on that boarding pass." The server checks both.
+
+The full theory lives in [`docs/AUTHENTICATION.md`](docs/AUTHENTICATION.md) and [`docs/DID.md`](docs/DID.md) — plain-English, no crypto background assumed. What follows is the practical "I just want to call my agent" version.
+
+<br>
+
+### The three extra headers
+
+Alongside the usual `Authorization: Bearer <hydra-jwt>`, every secured request carries:
+
+| Header | Value |
+|---|---|
+| `X-DID` | your DID string, e.g. `did:bindu:you_at_example_com:myagent:<uuid>` |
+| `X-DID-Timestamp` | current unix seconds (server allows 5 min skew) |
+| `X-DID-Signature` | `base58( Ed25519_sign( <signing payload> ) )` |
+
+The **signing payload** is reconstructed on the server like this:
+
+```python
+json.dumps({"body": <raw-body-string>, "did": <did>, "timestamp": <ts>}, sort_keys=True)
+```
+
+Two gotchas that will bite you until you've felt them:
+
+- **Match Python's JSON spacing.** Python's default `json.dumps` writes `", "` and `": "` (with spaces). `JSON.stringify` in JS writes them without. If your payload serializes differently, Ed25519 sees different bytes and the server returns `reason="crypto_mismatch"`.
+- **Sign what you send.** If you parse the body, modify it, re-serialize, and ship that — you signed the wrong bytes. Build the body string **once**, sign those exact bytes, send those exact bytes.
+
+<br>
+
+### Step 1 — get a bearer token from Hydra
+
+The agent prints a ready-to-run curl in its startup banner. The short version:
+
+```bash
+SECRET=$(jq -r '.[].client_secret' < .bindu/oauth_credentials.json)
+curl -X POST https://hydra.getbindu.com/oauth2/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=did:bindu:you_at_example_com:myagent:<uuid>" \
+  -d "client_secret=$SECRET" \
+  -d "scope=openid offline agent:read agent:write"
+```
+
+The response has an `access_token`. It's good for about an hour — cache it, refetch when you need it.
+
+<br>
+
+### Step 2 — pick your client
+
+**Python — the shortest working example.** Reads the agent's own keys (Bindu writes them to `.bindu/` on first boot), signs a request, polls for the result. Self-call works because the agent's keys *are* a valid caller identity.
+
+```python
+import base58, httpx, json, time, uuid
+from pathlib import Path
+from cryptography.hazmat.primitives import serialization
+
+# 1. Load the keys Bindu wrote on first boot
+priv  = serialization.load_pem_private_key(Path(".bindu/private.pem").read_bytes(), password=None)
+creds = next(iter(json.loads(Path(".bindu/oauth_credentials.json").read_text()).values()))
+did   = creds["client_id"]            # DID doubles as the Hydra client_id
+
+# 2. Exchange credentials for a short-lived JWT
+bearer = httpx.post("https://hydra.getbindu.com/oauth2/token", data={
+    "grant_type": "client_credentials",
+    "client_id": creds["client_id"], "client_secret": creds["client_secret"],
+    "scope": "openid offline agent:read agent:write",
+}).json()["access_token"]
+
+# 3. Build the body ONCE — these are the bytes we'll sign AND send
+tid = str(uuid.uuid4())
+body = json.dumps({
+    "jsonrpc": "2.0", "method": "message/send", "id": str(uuid.uuid4()),
+    "params": {"message": {
+        "role": "user", "kind": "message",
+        "parts": [{"kind": "text", "text": "Hello!"}],
+        "messageId": str(uuid.uuid4()), "contextId": str(uuid.uuid4()), "taskId": tid,
+    }},
+})
+
+# 4. Sign: base58(Ed25519( json.dumps({body,did,timestamp}, sort_keys=True) ))
+ts      = int(time.time())
+payload = json.dumps({"body": body, "did": did, "timestamp": ts}, sort_keys=True)
+sig     = base58.b58encode(priv.sign(payload.encode())).decode()
+
+# 5. Fire it
+r = httpx.post("http://localhost:3773/", content=body, headers={
+    "Content-Type":    "application/json",
+    "Authorization":   f"Bearer {bearer}",
+    "X-DID":           did,
+    "X-DID-Timestamp": str(ts),
+    "X-DID-Signature": sig,
+})
+print(r.status_code, r.json())
+```
+
+For a full-featured version with polling and error handling, see [`examples/hermes_agent/call.py`](examples/hermes_agent/call.py).
+
+<br>
+
+**Postman — paste one script into your collection.**
+
+1. Open your collection → **Pre-request Script** tab → paste the contents of [`docs/postman-did-signing.js`](docs/postman-did-signing.js).
+2. Set two collection variables: `bindu_did` (your DID string) and `bindu_did_seed` (your 32-byte Ed25519 seed, base64-encoded).
+3. Add an `Authorization: Bearer {{bindu_bearer}}` header and drop your Hydra token into `bindu_bearer`.
+4. Hit Send. The script signs the exact body bytes Postman is about to send and sets the three `X-DID-*` headers for you.
+
+Requires Postman Desktop v11+ (needs Ed25519 in `crypto.subtle`).
+
+<br>
+
+**Plain curl — technically possible, usually painful.** The signature depends on the body bytes you're about to send, so you need a helper script to compute the signature first, then substitute it into the curl call. If you're doing this, you're probably better off using the Python client above.
+
+<br>
+
+### When signatures fail
+
+The server logs one of three reasons. If your request gets rejected with a 403, ask the operator (or check the server log yourself):
+
+| Log says | What it means | Fix |
+|---|---|---|
+| `timestamp_out_of_window` | Your `X-DID-Timestamp` is more than 5 min off the server's clock, or you reused an old timestamp | Recompute `int(time.time())` on every request |
+| `malformed_input` | The base58 decoding of the signature or public key failed | Check the `X-DID-Signature` isn't URL-encoded, truncated, or wrapped in quotes |
+| `crypto_mismatch` | The bytes you signed ≠ the bytes you sent | Rebuild the payload with `sort_keys=True` and Python's default JSON spacing; sign the raw body string once and send the same bytes |
+
+One sharper failure mode we hit in testing: if `crypto_mismatch` persists and you're *sure* your bytes match, Hydra's stored public key for this DID may be stale from an older registration. Fix: stop the agent, delete `.bindu/oauth_credentials.json`, restart — Hydra's client record will be refreshed with the current keys.
+
+---
+
 ## Gateway — multi-agent orchestration
 
 A single `bindufy()`-wrapped agent is a microservice. The **Bindu Gateway** is a task-first orchestrator that sits on top: give it a user question and a catalog of A2A agents, and a planner LLM decomposes the work, calls the right agents over A2A, and streams results back as Server-Sent Events. No DAG engine, no separate orchestrator service — the planner's LLM picks tools per turn.
@@ -245,78 +380,34 @@ For a runnable multi-agent demo, see [`examples/gateway_test_fleet/`](examples/g
 
 ## Supported frameworks and examples
 
-Bindu is framework-agnostic. Every framework below is tested end-to-end with a runnable agent in this repo.
+Bindu is framework-agnostic. Bring whichever agent framework you already like — we tested the ones below end-to-end and they all work the same way: you hand Bindu a handler, it gives you a signed A2A microservice.
 
-### Python
+<br>
 
-**[AG2](https://github.com/ag2ai/ag2)** ![stars](https://img.shields.io/github/stars/ag2ai/ag2?style=social) — multi-agent collaboration (formerly AutoGen).
+| Language | Frameworks tested in this repo |
+|---|---|
+| **Python** | [AG2](https://github.com/ag2ai/ag2) · [Agno](https://github.com/agno-agi/agno) · [CrewAI](https://github.com/joaomdmoura/crewAI) · [Hermes Agent](https://github.com/NousResearch/hermes-agent) · [LangChain](https://github.com/langchain-ai/langchain) · [LangGraph](https://github.com/langchain-ai/langgraph) · [Notte](https://github.com/nottelabs/notte) |
+| **TypeScript** | [OpenAI SDK](https://github.com/openai/openai-node) · [LangChain.js](https://github.com/langchain-ai/langchainjs) |
+| **Kotlin** | [OpenAI Kotlin SDK](https://github.com/aallam/openai-kotlin) |
+| **Any other language** | via the [gRPC core](docs/grpc/) — add an SDK in a few hundred lines |
 
-- [AG2 Research Team](examples/ag2_research_team/) — multi-agent research pipeline with planner, researchers, and editor.
+Compatible with any LLM provider that speaks the OpenAI or Anthropic API: [OpenRouter](https://openrouter.ai/) (100+ models), [OpenAI](https://platform.openai.com/), [MiniMax](https://platform.minimaxi.com), and others.
 
-**[Agno](https://github.com/agno-agi/agno)** ![stars](https://img.shields.io/github/stars/agno-agi/agno?style=social) — production-ready agent framework with tools, reasoning, and memory.
+<br>
 
-- [Agent Swarm](examples/agent_swarm/) — building a living society of collaborating agents.
-- [AI Data Analysis](examples/ai-data-analysis-agent/) — autonomous analyst that ingests CSVs, computes stats, and visualizes findings.
-- [Beginner examples](examples/beginner/) — bite-sized agents for learning Bindu.
-- [Cybersecurity Newsletter](examples/cybersecurity-newsletter/) — researches CVEs and drafts a newsletter section.
-- [Medical Agent](examples/medical_agent/) — health information and symptom guidance with search.
-- [News Summarizer](examples/news-summarizer/) — searches and summarizes latest news on any topic.
-- [Premium Advisor](examples/premium-advisor/) — x402-gated agent: callers pay USDC before the handler runs.
-- [Speech-to-Text](examples/speech-to-text/) — multimodal agent transcribing real audio (MP3, WAV, OGG, M4A) via Gemini 2.0 Flash.
-- [Summarizer](examples/summarizer/) — concise text summaries via `openai/gpt-oss` on OpenRouter.
-- [Weather Research](examples/weather-research/) — location-aware weather information with search.
-- [Web Scraping](examples/web-scraping-agent/) — crawls pages, extracts structured data, formats output.
-- [Multilingual Collab](examples/multilingual-collab-agent/) — detects caller language, collaborates identity-aware.
-- [Gateway Test Fleet](examples/gateway_test_fleet/) — five small agents for exercising the Bindu Gateway end-to-end.
+### A handful of examples to get you started
 
-**[CrewAI](https://github.com/joaomdmoura/crewAI)** ![stars](https://img.shields.io/github/stars/joaomdmoura/crewAI?style=social) — role-based multi-agent orchestration.
+Five that cover the spectrum of what Bindu can do. All 20+ runnable examples live under [`examples/`](examples/).
 
-- [Cerina CBT Agent](examples/cerina_bindu/) — CBT therapy protocol generator.
+| Example | What it shows |
+|---|---|
+| [Agent Swarm](examples/agent_swarm/) | Multi-agent collaboration — a small "society" of Agno agents delegating work to each other. |
+| [Premium Advisor](examples/premium-advisor/) | **x402 payments** — caller has to pay USDC on Base before the handler runs. |
+| [Hermes via Bindu](examples/hermes_agent/) | **Third-party framework interop** — Nous Research's Hermes agent bindufied in ~90 lines. |
+| [Gateway Test Fleet](examples/gateway_test_fleet/) | Five small agents + one gateway — the multi-agent orchestration story end-to-end. |
+| [TypeScript OpenAI Agent](examples/typescript-openai-agent/) | **Polyglot proof** — a TS agent bindufied with the Bindu TS SDK; no Python to write. |
 
-**[Hermes Agent](https://github.com/NousResearch/hermes-agent)** ![stars](https://img.shields.io/github/stars/NousResearch/hermes-agent?style=social) — Nous Research's tool-using coding and research agent.
-
-- [Hermes via Bindu](examples/hermes_agent/) — Hermes' `AIAgent` exposed as a signed A2A microservice.
-
-**[LangChain](https://github.com/langchain-ai/langchain)** ![stars](https://img.shields.io/github/stars/langchain-ai/langchain?style=social) — build applications with LLMs.
-
-- [Document Analyzer](examples/document-analyzer/) — PDF/DOCX ingestion + Q&A.
-- [PDF Research Agent](examples/pdf_research_agent/) — retrieval-augmented research over long PDFs.
-
-**[LangGraph](https://github.com/langchain-ai/langgraph)** ![stars](https://img.shields.io/github/stars/langchain-ai/langgraph?style=social) — stateful multi-agent workflows.
-
-- [Blog Writing Agent](examples/langgraph_blog_writing_agent/) — map-reduce technical blog post writer.
-
-**[Notte](https://github.com/nottelabs/notte)** ![stars](https://img.shields.io/github/stars/nottelabs/notte?style=social) — real browser automation for agents.
-
-- [Notte Browser Agent](examples/notte-browser-agent/) — navigate JavaScript-rendered pages, fill forms, extract data.
-
-### TypeScript
-
-**[OpenAI SDK](https://github.com/openai/openai-node)** ![stars](https://img.shields.io/github/stars/openai/openai-node?style=social) — official OpenAI Node.js library.
-
-- [TypeScript OpenAI Agent](examples/typescript-openai-agent/) — general-purpose assistant bindufied via the Bindu TypeScript SDK.
-
-**[LangChain.js](https://github.com/langchain-ai/langchainjs)** ![stars](https://img.shields.io/github/stars/langchain-ai/langchainjs?style=social) — LangChain for JS/TS.
-
-- [TypeScript LangChain Agent](examples/typescript-langchain-agent/) — research assistant with LangChain tools.
-- [Quiz Agent](examples/typescript-langchain-quiz-agent/) — quiz generator specialist.
-
-### Kotlin
-
-**[OpenAI Kotlin SDK](https://github.com/aallam/openai-kotlin)** ![stars](https://img.shields.io/github/stars/aallam/openai-kotlin?style=social) — OpenAI API client for Kotlin.
-
-- [Kotlin OpenAI Agent](examples/kotlin-openai-agent/) — assistant built with Kotlin and the Bindu Kotlin SDK.
-
-### Any other language
-
-Bindu is language-agnostic via gRPC — the core runs in Python, your handler can be in any language that speaks gRPC. See [`docs/grpc/`](docs/grpc/) for how it works and how to add a new SDK.
-
-### Compatible LLM providers
-
-- **[OpenRouter](https://openrouter.ai/)** — 100+ models through one API
-- **[OpenAI](https://platform.openai.com/)** — GPT-4o, GPT-5, and friends
-- **[MiniMax AI](https://platform.minimaxi.com)** — M2.7 (1M context), M2.5, M2.5-highspeed (204K context)
-- Anything that speaks the OpenAI or Anthropic APIs
+**See the full catalog:** [`examples/`](examples/) — 20+ agents covering CSV analysis, PDF Q&A, speech-to-text, web scraping, cybersecurity newsletters, multi-lingual collab, blog writing, and more.
 
 Missing a framework you use? Open an issue or ask on [Discord](https://discord.gg/3w5zuYUuwt).
 
