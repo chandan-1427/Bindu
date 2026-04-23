@@ -23,14 +23,14 @@ No infrastructure to write. No framework to rewrite. Works from Python, TypeScri
 
   <p>
     <a href="README.md">English</a> ·
-    <a href="README.de.md">Deutsch</a> ·
-    <a href="README.es.md">Español</a> ·
-    <a href="README.fr.md">Français</a> ·
-    <a href="README.hi.md">हिंदी</a> ·
-    <a href="README.bn.md">বাংলা</a> ·
-    <a href="README.zh.md">中文</a> ·
-    <a href="README.nl.md">Nederlands</a> ·
-    <a href="README.ta.md">தமிழ்</a>
+    <a href="i18n/README.de.md">Deutsch</a> ·
+    <a href="i18n/README.es.md">Español</a> ·
+    <a href="i18n/README.fr.md">Français</a> ·
+    <a href="i18n/README.hi.md">हिंदी</a> ·
+    <a href="i18n/README.bn.md">বাংলা</a> ·
+    <a href="i18n/README.zh.md">中文</a> ·
+    <a href="i18n/README.nl.md">Nederlands</a> ·
+    <a href="i18n/README.ta.md">தமிழ்</a>
   </p>
 
   <p>
