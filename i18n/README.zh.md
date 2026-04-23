@@ -55,7 +55,7 @@
 
 ---
 
-**Bindu**（读作：_binduu_）是一个为AI代理提供身份、通信和支付能力的操作层。它提供了一个生产就绪的服务，具有方便的API，可以使用开放协议连接、认证和编排分布式系统中的代理：**A2A**、**AP2**和**X402**。构建于分布式架构之上（任务管理器、调度程序、存储），Bindu 使得开发快速且易于与任何 AI 框架集成。将任何代理框架转变为一个完全互操作的服务，以便在代理互联网中进行通信、协作和商业。
+**Bindu**（读作：_binduu_）是一个为AI代理提供身份、通信和支付能力的操作层。它提供了一个生产就绪的服务，具有方便的API，可以使用开放协议连接、认证和编排分布式系统中的代理：**A2A**和**X402**。构建于分布式架构之上（任务管理器、调度程序、存储），Bindu 使得开发快速且易于与任何 AI 框架集成。将任何代理框架转变为一个完全互操作的服务，以便在代理互联网中进行通信、协作和商业。
 
 <p align="center">
   <strong>🌟 <a href="https://getbindu.com">注册您的代理</a> • 🌻 <a href="https://docs.getbindu.com">文档</a> • 💬 <a href="https://discord.gg/3w5zuYUuwt">Discord 社区</a></strong>
@@ -517,7 +517,7 @@ _每个符号都是一个代理——一个智能的火花。这个小点是 Bin
 
 ### NightSky 连接（进行中）
 
-NightSky 使代理群体能够协作。每个 Bindu 是一个点，用 A2A、AP2 和 X402 的共享语言注释代理。代理可以托管在任何地方——笔记本电脑、云或集群——但使用相同的协议，按设计相互信任，并作为一个单一的分布式思维共同工作。
+NightSky 使代理群体能够协作。每个 Bindu 是一个点，用 A2A 和 X402 的共享语言注释代理。代理可以托管在任何地方——笔记本电脑、云或集群——但使用相同的协议，按设计相互信任，并作为一个单一的分布式思维共同工作。
 
 > **💭 没有计划的目标只是一个愿望。**
 
@@ -672,7 +672,6 @@ Bindu 是在 [Apache License 2.0](https://choosealicense.com/licenses/apache-2.0
 - [FastA2A](https://github.com/pydantic/fasta2a)
 - [12 Factor Agents](https://github.com/humanlayer/12-factor-agents/blob/main/content/factor-11-trigger-from-anywhere.md)
 - [A2A](https://github.com/a2aproject/A2A)
-- [AP2](https://github.com/google-agentic-commerce/AP2)
 - [Huggingface chatui](https://github.com/huggingface/chat-ui)
 - [X402](https://github.com/coinbase/x402)
 - [Bindu Logo](https://openmoji.org/library/emoji-1F33B/)
@@ -685,7 +684,6 @@ Bindu 是在 [Apache License 2.0](https://choosealicense.com/licenses/apache-2.0
 ## 🗺️ 路线图
 
 - [ ] GRPC 传输支持- [ ] 将测试覆盖率提高到80%（进行中）
-- [ ] AP2端到端支持
 - [ ] DSPy集成（进行中）
 - [ ] MLTS支持
 - [ ] 与其他促进者一起支持X402

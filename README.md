@@ -17,7 +17,7 @@
 > **Write your agent in any framework. Wrap it with `bindufy()`.**
 > **Ship a signed A2A microservice — identity, OAuth2, and on-chain payments — in ten lines of code.**
 
-No infrastructure to write. No framework to rewrite. Works from Python, TypeScript, and Kotlin, and layered on three open protocols: [A2A](https://github.com/a2aproject/A2A), [AP2](https://github.com/google-agentic-commerce/AP2), and [x402](https://github.com/coinbase/x402).
+No infrastructure to write. No framework to rewrite. Works from Python, TypeScript, and Kotlin, and layered on two open protocols: [A2A](https://github.com/a2aproject/A2A) and [x402](https://github.com/coinbase/x402).
 
 <div align="center">
 
@@ -601,7 +601,7 @@ Discussion and help happen on [Discord](https://discord.gg/3w5zuYUuwt). See [`.g
 
 Bindu stands on the shoulders of:
 
-[FastA2A](https://github.com/pydantic/fasta2a) · [A2A](https://github.com/a2aproject/A2A) · [AP2](https://github.com/google-agentic-commerce/AP2) · [x402](https://github.com/coinbase/x402) · [Hugging Face chat-ui](https://github.com/huggingface/chat-ui) · [12 Factor Agents](https://github.com/humanlayer/12-factor-agents/blob/main/content/factor-11-trigger-from-anywhere.md) · [OpenCode](https://github.com/anomalyco/opencode) · [OpenMoji](https://openmoji.org/library/emoji-1F33B/) · [ASCII Space Art](https://www.asciiart.eu/space/other)
+[FastA2A](https://github.com/pydantic/fasta2a) · [A2A](https://github.com/a2aproject/A2A) · [x402](https://github.com/coinbase/x402) · [Hugging Face chat-ui](https://github.com/huggingface/chat-ui) · [12 Factor Agents](https://github.com/humanlayer/12-factor-agents/blob/main/content/factor-11-trigger-from-anywhere.md) · [OpenCode](https://github.com/anomalyco/opencode) · [OpenMoji](https://openmoji.org/library/emoji-1F33B/) · [ASCII Space Art](https://www.asciiart.eu/space/other)
 
 ---
 
