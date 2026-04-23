@@ -12,7 +12,11 @@
 
 **The identity, communication & payments layer for AI agents.**
 
+</div>
 
+**Bindu** (read: _binduu_) turns any AI agent into a production microservice. Build your agent in any framework — Agno, LangChain, OpenAI SDK, even plain TypeScript — call `bindufy()`, and get a service with DID identity, A2A protocol, OAuth2 auth, and crypto payments. No infrastructure code. No rewriting.
+
+Works with Python, TypeScript, and Kotlin. Built on open protocols: **A2A**, **AP2**, and **X402**.
 
 <div align="center" id="top">
 
@@ -53,13 +57,6 @@
 
 </div>
 
----
-
-**Bindu** (read: _binduu_) turns any AI agent into a production microservice. Build your agent in any framework — Agno, LangChain, OpenAI SDK, even plain TypeScript — call `bindufy()`, and get a service with DID identity, A2A protocol, OAuth2 auth, and crypto payments. No infrastructure code. No rewriting.
-
-Works with Python, TypeScript, and Kotlin. Built on open protocols: **A2A**, **AP2**, and **X402**.
-
----
 
 <br/>
 
@@ -715,56 +712,8 @@ Grateful to these projects:
 - [X402](https://github.com/coinbase/x402)
 - [Bindu Logo](https://openmoji.org/library/emoji-1F33B/)
 - [ASCII Space Art](https://www.asciiart.eu/space/other)
+- [OpenCode](https://github.com/anomalyco/opencode)
 
----
-
-<br/>
-
-## 🌌 The Vision
-
-```
-a peek into the night sky
-}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
-{{            +             +                  +   @          {{
-}}   |                *           o     +                .    }}
-{{  -O-    o               .               .          +       {{
-}}   |                    _,.-----.,_         o    |          }}
-{{           +    *    .-'.         .'-.          -O-         {{
-}}      *            .'.-'   .---.   `'.'.         |     *    }}
-{{ .                /_.-'   /     \   .'-.\.                   {{
-}}         ' -=*<  |-._.-  |   @   |   '-._|  >*=-    .     + }}
-{{ -- )--           \`-.    \     /    .-'/                   }}
-}}       *     +     `.'.    '---'    .'.'    +       o       }}
-{{                  .  '-._         _.-'  .                   }}
-}}         |               `~~~~~~~`       - --===D       @   }}
-{{   o    -O-      *   .                  *        +          {{
-}}         |                      +         .            +    }}
-{{ jgs          .     @      o                        *       {{
-}}       o                          *          o           .  }}
-{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
-```
-
-_Each symbol is an agent — a spark of intelligence. The tiny dot is Bindu, the origin point in the Internet of Agents._
-
-### NightSky Connection (In Progress)
-
-NightSky enables swarms of agents. Each Bindu is a dot annotating agents with the shared language of A2A, AP2, and X402. Agents can be hosted anywhere — laptops, clouds, or clusters — yet speak the same protocol, trust each other by design, and work together as a single, distributed mind.
-
----
-
-<br/>
-
-## 🗺️ Roadmap
-
-- [x] gRPC transport + language-agnostic SDKs (TypeScript, Kotlin)
-- [ ] Increase test coverage to 80% (in progress)
-- [ ] AP2 end-to-end support
-- [ ] DSPy integration (in progress)
-- [ ] Rust SDK
-- [ ] MLTS support
-- [ ] X402 support with other facilitators
-
-> 💡 [Suggest features on Discord](https://discord.gg/3w5zuYUuwt)!
 
 ---
 
