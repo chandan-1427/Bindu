@@ -495,26 +495,64 @@ Bindu includes a beautiful chat interface at `http://localhost:5173`. Navigate t
 
 Bindu is **framework-agnostic** and tested with:
 
-**Python:**
-- **AG2** (formerly AutoGen)
-- **Agno**
-- **CrewAI**
-- **LangChain**
-- **LlamaIndex**
-- **FastAgent**
+### Python Frameworks
 
-**TypeScript:**
-- **OpenAI SDK**
-- **LangChain.js**
+- **[AG2](https://github.com/ag2ai/ag2)** ![GitHub stars](https://img.shields.io/github/stars/ag2ai/ag2?style=social) — Multi-agent collaboration framework
+  - 📘 [Example: AG2 Research Team](examples/ag2_research_team/)
+  
+- **[Agno](https://github.com/agno-agi/agno)** ![GitHub stars](https://img.shields.io/github/stars/agno-agi/agno?style=social) — Production-ready agent framework
+  - 📘 [Example: Agent Swarm](examples/agent_swarm/)
+  - 📘 [Example: AI Data Analysis Agent](examples/ai-data-analysis-agent/)
+  - 📘 [Example: Beginner Examples](examples/beginner/)
+  - 📘 [Example: Cybersecurity Newsletter](examples/cybersecurity-newsletter/)
+  - 📘 [Example: Medical Agent](examples/medical_agent/)
+  - 📘 [Example: News Summarizer](examples/news-summarizer/)
+  - 📘 [Example: Premium Advisor (X402 Payments)](examples/premium-advisor/)
+  - 📘 [Example: Speech-to-Text Agent](examples/speech-to-text/)
+  - 📘 [Example: Summarizer Agent](examples/summarizer/)
+  - 📘 [Example: Weather Research](examples/weather-research/)
+  - 📘 [Example: Web Scraping Agent](examples/web-scraping-agent/)
+  - 📘 [Example: Multilingual Collaboration](examples/multilingual-collab-agent/)
+  - 📘 [Example: Gateway Test Fleet](examples/gateway_test_fleet/)
+  
+- **[CrewAI](https://github.com/joaomdmoura/crewAI)** ![GitHub stars](https://img.shields.io/github/stars/joaomdmoura/crewAI?style=social) — Role-based multi-agent orchestration
+  - 📘 [Example: Cerina CBT Agent](examples/cerina_bindu/)
+  
+- **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** ![GitHub stars](https://img.shields.io/github/stars/NousResearch/hermes-agent?style=social) — Tool-using coding and research agent
+  - 📘 [Example: Hermes via Bindu](examples/hermes_agent/)
+  
+- **[LangChain](https://github.com/langchain-ai/langchain)** ![GitHub stars](https://img.shields.io/github/stars/langchain-ai/langchain?style=social) — Building applications with LLMs
+  - 📘 [Example: Document Analyzer](examples/document-analyzer/)
+  - 📘 [Example: PDF Research Agent](examples/pdf_research_agent/)
+  
+- **[LangGraph](https://github.com/langchain-ai/langgraph)** ![GitHub stars](https://img.shields.io/github/stars/langchain-ai/langgraph?style=social) — Stateful multi-agent workflows
+  - 📘 [Example: Blog Writing Agent](examples/langgraph_blog_writing_agent/)
+  
+- **[Notte](https://github.com/nottelabs/notte)** ![GitHub stars](https://img.shields.io/github/stars/nottelabs/notte?style=social) — Real browser automation for agents
+  - 📘 [Example: Notte Browser Agent](examples/notte-browser-agent/)
 
-**Kotlin:**
-- **OpenAI Kotlin SDK**
+### TypeScript Frameworks
+
+- **[OpenAI SDK](https://github.com/openai/openai-node)** ![GitHub stars](https://img.shields.io/github/stars/openai/openai-node?style=social) — Official OpenAI Node.js library
+  - 📘 [Example: TypeScript OpenAI Agent](examples/typescript-openai-agent/)
+  
+- **[LangChain.js](https://github.com/langchain-ai/langchainjs)** ![GitHub stars](https://img.shields.io/github/stars/langchain-ai/langchainjs?style=social) — LangChain for JavaScript/TypeScript
+  - 📘 [Example: TypeScript LangChain Agent](examples/typescript-langchain-agent/)
+  - 📘 [Example: TypeScript LangChain Quiz Agent](examples/typescript-langchain-quiz-agent/)
+
+### Kotlin Frameworks
+
+- **[OpenAI Kotlin SDK](https://github.com/aallam/openai-kotlin)** ![GitHub stars](https://img.shields.io/github/stars/aallam/openai-kotlin?style=social) — OpenAI API client for Kotlin
+  - 📘 [Example: Kotlin OpenAI Agent](examples/kotlin-openai-agent/)
+
+### Language-Agnostic Support
 
 Bindu is language-agnostic via gRPC — see [docs/grpc/](docs/grpc/) for how it works and how to add new languages.
 
-**Compatible LLM Providers:**
-- **OpenRouter** — Access 100+ models through a single API
-- **OpenAI** — GPT-4o, GPT-5, and more
+### Compatible LLM Providers
+
+- **[OpenRouter](https://openrouter.ai/)** — Access 100+ models through a single API
+- **[OpenAI](https://platform.openai.com/)** — GPT-4o, GPT-5, and more
 - **[MiniMax AI](https://platform.minimaxi.com)** — M2.7 (1M context), M2.5, M2.5-highspeed (204K context) via OpenAI-compatible API
 
 Want integration with your favorite framework? [Let us know on Discord](https://discord.gg/3w5zuYUuwt)!
