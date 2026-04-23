@@ -1,7 +1,7 @@
 <div align="center" id="top">
   <a href="https://getbindu.com">
     <picture>
-      <img src="assets/bindu.png" alt="Bindu" width="300">
+      <img src="../assets/bindu.png" alt="Bindu" width="300">
     </picture>
   </a>
 </div>
@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">🇬🇧 英语</a> •
+  <a href="../README.md">🇬🇧 英语</a> •
   <a href="README.de.md">🇩🇪 德语</a> •
   <a href="README.es.md">🇪🇸 西班牙语</a> •
   <a href="README.fr.md">🇫🇷 法语</a> •
@@ -36,7 +36,7 @@
 <br/>
 
 <p align="center">
-  <img src="assets/sunflower-mountains.jpeg" alt="Bindu — The Internet of Agents" width="720" />
+  <img src="../assets/sunflower-mountains.jpeg" alt="Bindu — The Internet of Agents" width="720" />
 </p>
 
 <p align="center">
@@ -222,7 +222,7 @@ bindufy(config, handler)
 # bindufy(config, handler, launch=True)
 ```
 
-![Sample Agent](assets/agno-simple.png)
+![Sample Agent](../assets/agno-simple.png)
 
 您的代理现在在 `deployment.url` 中配置的 URL 上实时运行。
 
@@ -440,18 +440,18 @@ curl --location 'http://localhost:3773/' \
 ## 🚀 核心功能
 | 特性 | 描述 | 文档 |
 | :--- | :--- | :--- |
-| **身份验证** | 使用 Ory Hydra OAuth2 进行安全的 API 访问（开发时可选） | [Guide →](docs/AUTHENTICATION.md) |
-| 💰 **支付集成 (X402)** | 在执行受保护的方法之前接受 Base 区块链上的 USDC 支付 | [Guide →](docs/PAYMENT.md) |
-| 💾 **PostgreSQL 存储** | 生产部署的持久存储（可选 - 默认使用 InMemoryStorage） | [Guide →](docs/STORAGE.md) |
-| 📋 **Redis 调度器** | 用于多工作者部署的分布式任务调度（可选 - 默认使用 InMemoryScheduler） | [Guide →](docs/SCHEDULER.md) |
-| 🎯 **技能系统** | 代理宣传和执行的可重用能力，用于智能任务路由 | [Guide →](docs/SKILLS.md) |
-| 🤝 **代理协商** | 基于能力的代理选择，用于智能编排 | [Guide →](docs/NEGOTIATION.md) |
-| 🌐 **隧道** | 将本地代理暴露到互联网以进行测试（**仅限本地开发，不适用于生产**） | [Guide →](docs/TUNNELING.md) |
-| 📬 **推送通知** | 实时 webhook 通知任务更新 - 无需轮询 | [Guide →](docs/NOTIFICATIONS.md) |
-| 📊 **可观察性与监控** | 使用 OpenTelemetry 和 Sentry 跟踪性能和调试问题 | [Guide →](docs/OBSERVABILITY.md) |
+| **身份验证** | 使用 Ory Hydra OAuth2 进行安全的 API 访问（开发时可选） | [Guide →](../docs/AUTHENTICATION.md) |
+| 💰 **支付集成 (X402)** | 在执行受保护的方法之前接受 Base 区块链上的 USDC 支付 | [Guide →](../docs/PAYMENT.md) |
+| 💾 **PostgreSQL 存储** | 生产部署的持久存储（可选 - 默认使用 InMemoryStorage） | [Guide →](../docs/STORAGE.md) |
+| 📋 **Redis 调度器** | 用于多工作者部署的分布式任务调度（可选 - 默认使用 InMemoryScheduler） | [Guide →](../docs/SCHEDULER.md) |
+| 🎯 **技能系统** | 代理宣传和执行的可重用能力，用于智能任务路由 | [Guide →](../docs/SKILLS.md) |
+| 🤝 **代理协商** | 基于能力的代理选择，用于智能编排 | [Guide →](../docs/NEGOTIATION.md) |
+| 🌐 **隧道** | 将本地代理暴露到互联网以进行测试（**仅限本地开发，不适用于生产**） | [Guide →](../docs/TUNNELING.md) |
+| 📬 **推送通知** | 实时 webhook 通知任务更新 - 无需轮询 | [Guide →](../docs/NOTIFICATIONS.md) |
+| 📊 **可观察性与监控** | 使用 OpenTelemetry 和 Sentry 跟踪性能和调试问题 | [Guide →](../docs/OBSERVABILITY.md) |
 | 🔄 **重试机制** | 自动重试，采用指数退避策略以增强代理的韧性 | [Guide →](docs.getbindu.com/bindu/learn/retry/overview) |
-| 🔑 **去中心化标识符 (DIDs)** | 用于可验证、安全的代理交互和支付集成的加密身份 | [Guide →](docs/DID.md) |
-| 🏥 **健康检查与指标** | 通过内置端点监控代理的健康和性能 | [Guide →](docs/HEALTH_METRICS.md) |
+| 🔑 **去中心化标识符 (DIDs)** | 用于可验证、安全的代理交互和支付集成的加密身份 | [Guide →](../docs/DID.md) |
+| 🏥 **健康检查与指标** | 通过内置端点监控代理的健康和性能 | [Guide →](../docs/HEALTH_METRICS.md) |
 
 ---
 
@@ -462,7 +462,7 @@ curl --location 'http://localhost:3773/' \
 Bindu 包含一个美观的聊天界面，位于 `http://localhost:5173`。导航到 `frontend` 文件夹并运行 `npm run dev` 启动服务器。
 
 <p align="center">
-  <img src="assets/agent-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="../assets/agent-ui.png" alt="Bindu Agent UI" width="640" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
 </p>
 
 ---
@@ -601,7 +601,7 @@ uv sync --dev
 pre-commit run --all-files
 ```
 
-> 📖 [Contributing Guidelines](.github/contributing.md)
+> 📖 [Contributing Guidelines](../.github/contributing.md)
 
 ---
 
@@ -733,7 +733,7 @@ Bindu 是在 [Apache License 2.0](https://choosealicense.com/licenses/apache-2.0
 <br/>
 
 <p align="center">
-  <img src="assets/sunflower-footer.jpeg" alt="Bindu" width="720" />
+  <img src="../assets/sunflower-footer.jpeg" alt="Bindu" width="720" />
 </p>
 
 <p align="center">
