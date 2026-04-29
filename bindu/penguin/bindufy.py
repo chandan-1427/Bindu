@@ -609,12 +609,90 @@ def _bindufy_core(
     return _manifest
 
 
+def _deploy_to_runtime(
+    config: Dict[str, Any],
+    runtime_config: Any,
+    caller_dir: Path,
+) -> None:
+    """Deploy the agent via the configured RuntimeProvider, then supervise."""
+    import asyncio
+
+    import bindu.runtime as _runtime_module
+    from bindu.runtime.source_packager import find_project_root
+
+    agent_name = config.get("name") or config.get("id")
+    if not agent_name:
+        raise ValueError("config must include 'name' for runtime deployment")
+
+    # Find the user's entry script: it's the file that called bindufy().
+    # `caller_dir` is its parent — assume the script itself lives there.
+    source_dir = find_project_root(caller_dir / "_placeholder.py")
+
+    provider = _runtime_module.get_provider(runtime_config.provider)
+
+    async def _run() -> None:
+        handle = await provider.deploy(
+            agent_name=agent_name,
+            source_dir=source_dir,
+            config=runtime_config,
+            env=None,
+        )
+        print(f"\n✓ {agent_name} serving at {handle.url}\n", flush=True)
+        await _supervise(provider, handle, runtime_config)
+
+    asyncio.run(_run())
+
+
+async def _supervise(provider: Any, handle: Any, runtime_config: Any) -> None:
+    """Stream VM logs to host stdout; block until SIGINT; apply on_exit."""
+    import asyncio
+    import signal
+
+    log_task = asyncio.create_task(_pipe_logs(provider, handle))
+
+    stop = asyncio.Event()
+    loop = asyncio.get_event_loop()
+
+    def _on_signal() -> None:
+        stop.set()
+
+    try:
+        loop.add_signal_handler(signal.SIGINT, _on_signal)
+        loop.add_signal_handler(signal.SIGTERM, _on_signal)
+    except NotImplementedError:
+        # Windows or restricted environments — fall back to default behavior.
+        pass
+
+    try:
+        await stop.wait()
+    finally:
+        log_task.cancel()
+        try:
+            await log_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        await provider.on_exit(handle, runtime_config.on_exit)
+
+
+async def _pipe_logs(provider: Any, handle: Any) -> None:
+    """Pipe VM logs to host stdout, prefixed with the agent name."""
+    prefix = f"[{handle.name}] "
+    try:
+        async for chunk in provider.stream_logs(handle, follow=True):
+            text = chunk.decode("utf-8", errors="replace")
+            for line in text.splitlines():
+                print(prefix + line, flush=True)
+    except Exception as e:
+        print(f"{prefix}log stream ended: {e}", flush=True)
+
+
 def bindufy(
     config: Dict[str, Any],
     handler: Callable[[list[dict[str, str]]], Any],
     run_server: bool = True,
     key_dir: str | Path | None = None,
     launch: bool = False,
+    runtime: Dict[str, Any] | None = None,
 ) -> AgentManifest:
     """Transform an agent handler into a Bindu microservice.
 
@@ -679,6 +757,11 @@ def bindufy(
             "HandlerError: 'handler' must be a callable function or coroutine function."
         )
 
+    # Validate runtime config up front so misconfiguration fails fast.
+    from bindu.runtime import RuntimeConfig
+
+    runtime_config = RuntimeConfig.from_dict(runtime)
+
     # Get caller information for file paths
     frame = inspect.currentframe()
     if not frame or not frame.f_back:
@@ -686,6 +769,17 @@ def bindufy(
 
     caller_file = inspect.getframeinfo(frame.f_back).filename
     caller_dir = Path(os.path.abspath(caller_file)).parent
+
+    # Runtime-mode dispatch: when a non-default provider is configured, the
+    # agent runs elsewhere. Hand off to the provider; do not start a local
+    # server here.
+    if runtime_config.provider != "in-process":
+        _deploy_to_runtime(
+            config=config,
+            runtime_config=runtime_config,
+            caller_dir=caller_dir,
+        )
+        return None  # type: ignore[return-value]
 
     return _bindufy_core(
         config=config,
