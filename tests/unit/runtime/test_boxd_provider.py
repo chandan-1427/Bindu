@@ -169,3 +169,115 @@ async def test_install_deps_raises_on_failure(mock_boxd, fake_box):
         await p._install_deps(
             fake_box, has_pyproject=False, has_requirements=False
         )
+
+
+# ── _start_agent ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_start_agent_execs_bindu_serve(mock_boxd, fake_box):
+    p = BoxdRuntimeProvider()
+    fake_box.exec.return_value = _ok_exec_result()
+
+    await p._start_agent(
+        fake_box,
+        script="my_agent.py",
+        env={"FOO": "bar"},
+        public_url="https://my-agent.boxd.sh",
+    )
+
+    fake_box.exec.assert_awaited()
+    cmd_call = fake_box.exec.await_args
+    assert cmd_call.args[0] == "sh"
+    assert cmd_call.args[1] == "-c"
+    cmd_str = cmd_call.args[2]
+    assert "bindu serve" in cmd_str
+    assert "--script /app/my_agent.py" in cmd_str
+    # env from caller plus the auto-injected BINDU_PUBLIC_URL
+    env = cmd_call.kwargs.get("env")
+    assert env is not None
+    assert env.get("FOO") == "bar"
+    assert env.get("BINDU_PUBLIC_URL") == "https://my-agent.boxd.sh"
+
+
+@pytest.mark.asyncio
+async def test_start_agent_raises_on_nonzero_exit(mock_boxd, fake_box):
+    bad = MagicMock()
+    bad.exit_code = 1
+    bad.stderr = "boom"
+    fake_box.exec.return_value = bad
+
+    p = BoxdRuntimeProvider()
+    with pytest.raises(RuntimeError, match="failed to start"):
+        await p._start_agent(fake_box, script="agent.py")
+
+
+# ── _wait_healthy ──────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_wait_healthy_returns_when_200(monkeypatch):
+    """Health check returns once /health responds 200."""
+    p = BoxdRuntimeProvider()
+
+    call_count = {"n": 0}
+
+    class _Resp:
+        def __init__(self, status: int):
+            self.status_code = status
+
+    class _FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            pass
+
+        async def get(self, url):
+            call_count["n"] += 1
+            if call_count["n"] < 3:
+                return _Resp(503)
+            return _Resp(200)
+
+    monkeypatch.setattr(
+        "bindu.runtime.boxd_provider.httpx.AsyncClient",
+        lambda *a, **kw: _FakeClient(),
+    )
+    # Avoid the 1s sleep inside the loop in tests
+    monkeypatch.setattr(
+        "bindu.runtime.boxd_provider.asyncio.sleep",
+        AsyncMock(return_value=None),
+    )
+
+    await p._wait_healthy("https://my-agent.boxd.sh", timeout=10.0)
+    assert call_count["n"] == 3
+
+
+@pytest.mark.asyncio
+async def test_wait_healthy_times_out(monkeypatch):
+    p = BoxdRuntimeProvider()
+
+    class _Resp:
+        status_code = 503
+
+    class _FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            pass
+
+        async def get(self, url):
+            return _Resp()
+
+    monkeypatch.setattr(
+        "bindu.runtime.boxd_provider.httpx.AsyncClient",
+        lambda *a, **kw: _FakeClient(),
+    )
+    monkeypatch.setattr(
+        "bindu.runtime.boxd_provider.asyncio.sleep",
+        AsyncMock(return_value=None),
+    )
+
+    with pytest.raises(TimeoutError, match="health"):
+        await p._wait_healthy("https://my-agent.boxd.sh", timeout=0.1)

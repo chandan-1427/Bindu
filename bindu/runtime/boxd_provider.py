@@ -13,8 +13,11 @@ directly to the VM's public URL.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any, AsyncIterator, Literal
+
+import httpx
 
 from bindu.runtime.base import RuntimeHandle, RuntimeProvider, register_provider
 from bindu.runtime.config import RuntimeConfig
@@ -90,6 +93,46 @@ class BoxdRuntimeProvider(RuntimeProvider):
                 raise RuntimeError(
                     f"command {cmd} failed in VM: {stderr}"
                 )
+
+    async def _start_agent(
+        self,
+        box: Any,
+        script: str,
+        env: dict[str, str] | None = None,
+        public_url: str | None = None,
+    ) -> None:
+        """Exec ``bindu serve --script /app/<script>`` inside the VM."""
+        merged_env = dict(env or {})
+        if public_url:
+            merged_env["BINDU_PUBLIC_URL"] = public_url
+
+        # nohup + & via sh -c so the exec call returns once the agent is
+        # forked. Output captured to a fixed log path; we pipe it via
+        # box.stream_logs() later.
+        cmd_str = (
+            f"nohup bindu serve --script /app/{script} "
+            f"> /var/log/bindu-agent.log 2>&1 &"
+        )
+        result = await box.exec("sh", "-c", cmd_str, env=merged_env)
+        if getattr(result, "exit_code", 0) != 0:
+            stderr = getattr(result, "stderr", "")
+            raise RuntimeError(f"failed to start agent: {stderr}")
+
+    async def _wait_healthy(self, url: str, timeout: float = 60.0) -> None:
+        """Poll ``{url}/health`` until 200 or timeout."""
+        deadline = asyncio.get_event_loop().time() + timeout
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            while asyncio.get_event_loop().time() < deadline:
+                try:
+                    resp = await client.get(f"{url}/health")
+                    if resp.status_code == 200:
+                        return
+                except httpx.HTTPError:
+                    pass
+                await asyncio.sleep(1.0)
+        raise TimeoutError(
+            f"agent at {url} did not become healthy within {timeout}s"
+        )
 
     async def deploy(
         self,
