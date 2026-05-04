@@ -22,7 +22,7 @@ import httpx
 
 from bindu.runtime.base import RuntimeHandle, RuntimeProvider, register_provider
 from bindu.runtime.config import RuntimeConfig
-from bindu.runtime.source_packager import build_tarball
+from bindu.runtime.source_packager import build_tarball, find_project_root
 
 # Bindu's default HTTP port. The boxd proxy is configured to forward to
 # this port at VM creation time, so the agent's public URL routes correctly.
@@ -31,6 +31,30 @@ BINDU_DEFAULT_PORT = 3773
 # Where we stage the user's source inside the VM. Must be writable by the
 # default VM user (``boxd``); ``/app`` requires sudo on stock boxd images.
 APP_DIR = "/home/boxd/app"
+
+# Where we stage the host's bindu source when ``bindu_version == "local"``.
+BINDU_SRC_DIR = "/home/boxd/bindu_source"
+
+# Repo paths excluded when shipping the host's bindu source to a VM:
+# nothing here is needed by ``pip install -e .`` for the Python package.
+# Keeping the tarball small avoids hitting boxd's gRPC message size limit.
+_BINDU_SHIP_EXCLUDES = (
+    "frontend/",
+    "assets/",
+    "examples/",
+    "docs/",
+    "tests/",
+    "gateway/",
+    "sdks/",
+    "i18n/",
+    "bugs/",
+    "release-notes/",
+    "scripts/",
+    ".agents/",
+    "alembic/",
+    ".github/",
+    ".vscode/",
+)
 
 _VM_READY_TIMEOUT = 60.0
 _HEALTH_TIMEOUT = 60.0
@@ -136,6 +160,36 @@ class BoxdRuntimeProvider(RuntimeProvider):
             error=f"failed to extract source to {APP_DIR}",
         )
 
+    async def _ship_bindu_source(self, box: Any) -> None:
+        """Tar the host's bindu source tree, ship to ``BINDU_SRC_DIR``.
+
+        Used by ``bindu_version == "local"``: lets the VM run the same bindu
+        as the host, useful for testing pre-publication branches and for
+        users running a patched bindu.
+
+        The bindu repo includes ~16 MB of frontend / assets / docs that the
+        Python package doesn't need at runtime; we exclude them to stay well
+        under boxd's per-message gRPC upload limit.
+        """
+        import bindu as _bindu
+
+        host_root = find_project_root(Path(_bindu.__file__).parent)
+        if not (host_root / "pyproject.toml").exists():
+            raise RuntimeError(
+                "--bindu-version=local requires bindu installed from a source "
+                f"checkout; no pyproject.toml found at or above {host_root}"
+            )
+        blob = build_tarball(host_root, extra_ignores=_BINDU_SHIP_EXCLUDES)
+        await box.write_file(blob, "/tmp/bindu-source.tar.gz")  # nosec B108
+        await _exec_or_raise(
+            box,
+            "sh",
+            "-c",
+            f"mkdir -p {BINDU_SRC_DIR} && "
+            f"tar xzf /tmp/bindu-source.tar.gz -C {BINDU_SRC_DIR}",
+            error=f"failed to extract bindu source to {BINDU_SRC_DIR}",
+        )
+
     async def _install_deps(
         self,
         box: Any,
@@ -148,9 +202,22 @@ class BoxdRuntimeProvider(RuntimeProvider):
         ``--break-system-packages``: stock boxd images are Ubuntu 24.04
         where the system Python is "externally managed" (PEP 668) and
         plain ``pip install`` is refused. The VM is single-tenant.
+
+        ``bindu_version`` cases:
+          - ``"local"``: editable install from ``BINDU_SRC_DIR`` (must have
+            been shipped via :meth:`_ship_bindu_source`).
+          - ``"X.Y.Z"``: ``pip install bindu==X.Y.Z`` from PyPI.
+          - ``None``: ``pip install bindu`` (latest from PyPI).
         """
-        bindu_pkg = f"bindu=={bindu_version}" if bindu_version else "bindu"
-        steps = [f"pip install --break-system-packages {bindu_pkg}"]
+        if bindu_version == "local":
+            bindu_install = f"pip install --break-system-packages -e {BINDU_SRC_DIR}"
+        elif bindu_version:
+            bindu_install = (
+                f"pip install --break-system-packages bindu=={bindu_version}"
+            )
+        else:
+            bindu_install = "pip install --break-system-packages bindu"
+        steps = [bindu_install]
         if has_requirements:
             steps.append(
                 f"pip install --break-system-packages -r {APP_DIR}/requirements.txt"
@@ -263,6 +330,8 @@ class BoxdRuntimeProvider(RuntimeProvider):
                     raise RuntimeError(
                         "source_dir is required when config.image is not set"
                     )
+                if config.bindu_version == "local":
+                    await self._ship_bindu_source(box)
                 await self._ship_source(box, source_dir)
                 has_pyproject = (source_dir / "pyproject.toml").exists()
                 has_requirements = (source_dir / "requirements.txt").exists()

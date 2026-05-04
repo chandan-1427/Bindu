@@ -1,21 +1,24 @@
 # Runtime providers
 
 A bindu agent's *runtime* is where its Python process actually executes.
-The default runtime is in-process: `python my_agent.py` runs the agent
-in your own terminal. A `RuntimeProvider` lets you swap that — the
-canonical example is `BoxdRuntimeProvider`, which runs the agent inside
-a [boxd](https://boxd.sh) microVM with its own public URL, DID, and
-HTTPS domain.
+By default, `python my_agent.py` runs the agent in your own terminal — that's
+the in-process runtime. The `bindu deploy` CLI lets you run the same script
+*elsewhere* via a `RuntimeProvider`. The canonical example is
+`BoxdRuntimeProvider`, which runs the agent inside a [boxd](https://boxd.sh)
+microVM with its own public URL, DID, and HTTPS domain.
 
 ## When to use
 
 - **Default (in-process):** local development, anywhere you control the
-  process and the network.
-- **Boxd runtime:** when you want the agent to be a *real* microservice —
-  isolated from your laptop, addressable on a public URL, with its own
-  identity and persistent state. Required for hosted multi-tenant agents.
+  process and the network. Just `python my_agent.py`.
+- **Boxd runtime (`bindu deploy --runtime=boxd`):** when you want the agent
+  to be a *real* microservice — isolated from your laptop, addressable on a
+  public URL, with its own identity and persistent state. Required for hosted
+  multi-tenant agents.
 
-## Quickstart
+## Design: deploy is a CLI verb, not a kwarg
+
+The agent script is *pure runtime* — no deploy concerns leak into it:
 
 ```python
 from bindu.penguin.bindufy import bindufy
@@ -31,14 +34,13 @@ config = {
     "deployment": {"url": "http://localhost:3773"},
 }
 
-bindufy(
-    config,
-    handler,
-    runtime={"provider": "boxd"},
-)
+bindufy(config, handler)
 ```
 
-Run it: `BOXD_API_KEY=bxk_... python my_agent.py`. Output:
+Run locally: `python my_agent.py` → serves on `localhost:3773`.
+
+Deploy remotely: `bindu deploy my_agent.py --runtime=boxd --auto-suspend=60` →
+serves on `https://my-agent.boxd.sh`. Output:
 
 ```
 ✓ my-agent serving at https://my-agent.boxd.sh
@@ -47,13 +49,18 @@ Run it: `BOXD_API_KEY=bxk_... python my_agent.py`. Output:
 [my-agent] INFO: Application startup complete.
 ```
 
+The same script runs in both contexts; only the launch verb changes. Inside
+the deployed VM the agent runs via `bindu serve --script my_agent.py`, which
+is just `python my_agent.py` plus a few CLI niceties — `bindufy()` serves
+in-process, exactly as it does locally.
+
 A2A clients can now reach the agent at `https://my-agent.boxd.sh`. Ctrl-C
-detaches; the VM auto-suspends after 60s of inactivity. Re-running the
-script resumes the same VM and updates the source.
+detaches; the VM auto-suspends after 60s of inactivity. Re-running
+`bindu deploy` resumes the same VM and updates the source.
 
 ## See also
 
-- [boxd.md](boxd.md) — full boxd-runtime config reference.
+- [boxd.md](boxd.md) — full `bindu deploy` flag reference for the boxd runtime.
 - [custom-image.md](custom-image.md) — A1 mode (user-built Docker images).
 - [`docs/superpowers/specs/2026-04-29-bindu-runtime-design.md`](../superpowers/specs/2026-04-29-bindu-runtime-design.md) — design rationale.
 
@@ -61,7 +68,7 @@ script resumes the same VM and updates the source.
 
 - One runtime provider ships in-tree: `boxd`. The abstraction supports
   others (e2b, modal, fly.io) but no providers besides boxd are bundled.
-- No live source-watch / auto-redeploy. Editing your agent script
-  requires re-running the entry point.
-- The boxd Python SDK is not yet on PyPI, so until it ships, both bindu
-  and boxd must be installed editably from local checkouts.
+- No live source-watch / auto-redeploy. Editing your agent script requires
+  re-running `bindu deploy`.
+- No declarative manifest (`bindu.toml`) yet; all deploy config is via CLI
+  flags. Planned as a follow-up.

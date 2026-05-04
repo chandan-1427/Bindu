@@ -127,16 +127,25 @@ def _walk_included(root: Path, spec: IgnoreSpec) -> list[Path]:
     return files
 
 
-def build_tarball(root: Path) -> bytes:
+def build_tarball(root: Path, extra_ignores: tuple[str, ...] = ()) -> bytes:
     """Tar+gzip everything under ``root`` that survives ``should_include``.
 
     Returns the gzipped tar as bytes. Files are stored with paths relative
     to ``root``.
 
+    Args:
+        root: Project root to walk.
+        extra_ignores: Additional ignore patterns to apply on top of
+            ``.gitignore`` / ``.binduignore``. Same syntax (``frontend/``,
+            ``*.bin``, etc.). Used by callers that need to ship a subset
+            of the repo without mutating user files.
+
     Raises:
         SourceTooLargeError: when compressed size > ``MAX_TARBALL_BYTES``.
     """
     spec = IgnoreSpec.load(root)
+    if extra_ignores:
+        spec = IgnoreSpec(patterns=spec.patterns + tuple(extra_ignores))
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for path in _walk_included(root, spec):

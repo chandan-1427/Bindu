@@ -196,6 +196,33 @@ async def test_install_deps_raises_on_failure(mock_boxd, fake_box):
         await p._install_deps(fake_box, has_pyproject=False, has_requirements=False)
 
 
+@pytest.mark.asyncio
+async def test_install_deps_bindu_version_local(mock_boxd, fake_box):
+    """bindu_version='local' installs bindu editable from BINDU_SRC_DIR."""
+    from bindu.runtime.boxd_provider import BINDU_SRC_DIR
+
+    fake_box.exec.return_value = _ok_exec_result()
+    p = BoxdRuntimeProvider()
+
+    await p._install_deps(
+        fake_box,
+        has_pyproject=False,
+        has_requirements=False,
+        bindu_version="local",
+    )
+    install_calls = [
+        c
+        for c in fake_box.exec.await_args_list
+        if c.args and c.args[0] == "sh" and "pip install" in c.args[2]
+    ]
+    assert len(install_calls) == 1
+    cmd = install_calls[0].args[2]
+    assert f"pip install --break-system-packages -e {BINDU_SRC_DIR}" in cmd
+    # Must NOT pull from PyPI when local mode is requested.
+    assert "bindu==" not in cmd
+    assert "pip install --break-system-packages bindu " not in cmd
+
+
 # ── _start_agent ───────────────────────────────────────────────────
 
 

@@ -5,6 +5,9 @@ Provides the ``bindu`` command with subcommands:
   - ``bindu serve --grpc``       : start the Bindu core for SDK registration
   - ``bindu serve --script PATH`` : execute a user agent script (the script
     calls ``bindufy()`` itself). Used by ``BoxdRuntimeProvider`` inside the VM.
+  - ``bindu deploy <script>``     : package the script's project and deploy it
+    via a RuntimeProvider (e.g. ``--runtime=boxd``). Streams VM logs to
+    stdout, applies ``--on-exit`` policy on Ctrl-C.
   - ``bindu logs <agent>``        : stream logs from the agent's VM
   - ``bindu shell <agent>``       : open an interactive shell on the agent's VM
 """
@@ -14,6 +17,7 @@ import asyncio
 import os
 import signal
 import sys
+from pathlib import Path
 from typing import Any
 
 from bindu.utils.logging import get_logger
@@ -93,6 +97,138 @@ async def _handle_shell(agent_name: str) -> None:
         await box.exec("bash", interactive=True)
 
 
+def _capture_agent_metadata(script_path: str) -> dict[str, Any]:
+    """Run the user's script with ``BINDU_DEPLOY_CAPTURE`` set; read the JSON.
+
+    bindufy() short-circuits when the env var is set, dumping the agent name
+    and caller_dir without performing any heavy runtime setup.
+    """
+    import json
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        capture_path = f.name
+    Path(capture_path).write_text("")
+
+    prev = os.environ.get("BINDU_DEPLOY_CAPTURE")
+    os.environ["BINDU_DEPLOY_CAPTURE"] = capture_path
+    try:
+        _run_user_script(script_path)
+    finally:
+        if prev is None:
+            os.environ.pop("BINDU_DEPLOY_CAPTURE", None)
+        else:
+            os.environ["BINDU_DEPLOY_CAPTURE"] = prev
+
+    raw = Path(capture_path).read_text()
+    Path(capture_path).unlink(missing_ok=True)
+    if not raw:
+        sys.exit(f"Error: {script_path} did not call bindufy() — nothing to deploy")
+    return json.loads(raw)
+
+
+def _build_runtime_dict(args: argparse.Namespace) -> dict[str, Any]:
+    """Translate ``bindu deploy`` flags into a RuntimeConfig dict."""
+    out: dict[str, Any] = {"provider": args.runtime}
+    if args.image:
+        out["image"] = args.image
+    if args.vcpu is not None:
+        out["vcpu"] = args.vcpu
+    if args.memory:
+        out["memory"] = args.memory
+    if args.disk:
+        out["disk"] = args.disk
+    if args.auto_suspend is not None:
+        out["auto_suspend"] = args.auto_suspend
+    if args.on_exit:
+        out["on_exit"] = args.on_exit
+    if args.bindu_version:
+        out["bindu_version"] = args.bindu_version
+    if args.env:
+        env_dict: dict[str, str] = {}
+        for kv in args.env:
+            if "=" not in kv:
+                sys.exit(f"Error: --env value must be KEY=VALUE, got: {kv!r}")
+            k, v = kv.split("=", 1)
+            env_dict[k] = v
+        out["env"] = env_dict
+    return out
+
+
+async def _pipe_logs(provider: Any, handle: Any) -> None:
+    """Stream VM logs to host stdout, prefixed with the agent name."""
+    prefix = f"[{handle.name}] "
+    try:
+        async for chunk in provider.stream_logs(handle, follow=True):
+            text = chunk.decode("utf-8", errors="replace")
+            for line in text.splitlines():
+                print(prefix + line, flush=True)
+    except Exception as e:
+        logger.warning(f"{prefix}log stream ended: {e}")
+
+
+async def _supervise(provider: Any, handle: Any, runtime_config: Any) -> None:
+    """Stream logs, block on SIGINT, then apply the configured on_exit."""
+    log_task = asyncio.create_task(_pipe_logs(provider, handle))
+
+    stop = asyncio.Event()
+    loop = asyncio.get_event_loop()
+
+    def _on_signal() -> None:
+        stop.set()
+
+    try:
+        loop.add_signal_handler(signal.SIGINT, _on_signal)
+        loop.add_signal_handler(signal.SIGTERM, _on_signal)
+    except NotImplementedError:
+        pass  # Windows / restricted envs
+
+    try:
+        await stop.wait()
+    finally:
+        log_task.cancel()
+        try:
+            await log_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning(f"log streaming task failed: {e}")
+        await provider.on_exit(handle, runtime_config.on_exit)
+
+
+def _handle_deploy(args: argparse.Namespace) -> None:
+    """Handle ``bindu deploy <script>``: capture metadata → deploy → supervise."""
+    from bindu.runtime import RuntimeConfig, get_provider
+    from bindu.runtime.source_packager import find_project_root
+
+    script_path = os.path.abspath(args.script)
+    if not os.path.isfile(script_path):
+        sys.exit(f"Error: script not found: {script_path}")
+
+    captured = _capture_agent_metadata(script_path)
+    agent_name = args.name or captured["agent_name"]
+    caller_dir = Path(captured["caller_dir"])
+    source_dir = find_project_root(caller_dir)
+
+    runtime_config = RuntimeConfig.from_dict(_build_runtime_dict(args))
+    if runtime_config.provider == "in-process":
+        sys.exit("Error: 'bindu deploy' requires a non-default --runtime")
+
+    provider = get_provider(runtime_config.provider)
+
+    async def _run() -> None:
+        handle = await provider.deploy(
+            agent_name=agent_name,
+            source_dir=source_dir,
+            config=runtime_config,
+            env=None,
+        )
+        print(f"\n✓ {agent_name} serving at {handle.url}\n", flush=True)
+        await _supervise(provider, handle, runtime_config)
+
+    asyncio.run(_run())
+
+
 def main() -> None:
     """Run the Bindu CLI."""
     parser = argparse.ArgumentParser(prog="bindu", description="Bindu Framework CLI")
@@ -132,6 +268,66 @@ def main() -> None:
     )
     shell_parser.add_argument("agent", type=str, help="Agent name")
 
+    deploy_parser = subparsers.add_parser(
+        "deploy",
+        help="Package a bindu agent script and deploy it via a RuntimeProvider",
+    )
+    deploy_parser.add_argument(
+        "script", type=str, help="Path to the user agent script that calls bindufy()"
+    )
+    deploy_parser.add_argument(
+        "--runtime",
+        type=str,
+        default="boxd",
+        help="Runtime provider (default: boxd)",
+    )
+    deploy_parser.add_argument(
+        "--name",
+        type=str,
+        default=None,
+        help="Override the agent name from the script's config",
+    )
+    deploy_parser.add_argument(
+        "--image",
+        type=str,
+        default=None,
+        help="A1 mode: deploy from this image instead of shipping source",
+    )
+    deploy_parser.add_argument("--vcpu", type=int, default=None)
+    deploy_parser.add_argument("--memory", type=str, default=None)
+    deploy_parser.add_argument("--disk", type=str, default=None)
+    deploy_parser.add_argument(
+        "--auto-suspend",
+        type=int,
+        default=None,
+        dest="auto_suspend",
+        help="Seconds idle before the VM auto-suspends",
+    )
+    deploy_parser.add_argument(
+        "--on-exit",
+        type=str,
+        choices=("suspend", "destroy", "detach"),
+        default=None,
+        dest="on_exit",
+    )
+    deploy_parser.add_argument(
+        "--bindu-version",
+        type=str,
+        default=None,
+        dest="bindu_version",
+        help=(
+            "Pin bindu version installed in the VM. Use 'local' to ship the "
+            "host's bindu source instead of pulling from PyPI."
+        ),
+    )
+    deploy_parser.add_argument(
+        "--env",
+        action="append",
+        default=None,
+        metavar="KEY=VALUE",
+        help="Extra env var for the agent inside the VM (repeatable)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -140,6 +336,8 @@ def main() -> None:
         asyncio.run(_handle_logs(args.agent, follow=not args.no_follow))
     elif args.command == "shell":
         asyncio.run(_handle_shell(args.agent))
+    elif args.command == "deploy":
+        _handle_deploy(args)
     else:
         parser.print_help()
         sys.exit(1)

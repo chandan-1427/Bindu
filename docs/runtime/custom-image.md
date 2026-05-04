@@ -1,8 +1,8 @@
 # Custom image (A1 mode)
 
-When you set `runtime["image"]`, the boxd runtime skips source packaging
-entirely. boxd creates the VM from your Docker image and the image's
-`CMD` is the entrypoint. Use this when:
+When you pass `--image` to `bindu deploy`, the boxd runtime skips source
+packaging entirely. boxd creates the VM from your Docker image and the
+image's `CMD` is the entrypoint. Use this when:
 
 - Your agent has gnarly native deps (Rust toolchain, system libs).
 - You want reproducible deploys (pinned image hashes, audited bases).
@@ -32,18 +32,13 @@ private one with credentials configured on your boxd account).
 
 ## Wiring it up
 
-```python
-bindufy(
-    config,
-    handler,
-    runtime={
-        "provider": "boxd",
-        "image": "ghcr.io/me/my-agent:v1.2.0",
-    },
-)
+```bash
+bindu deploy my_agent.py \
+    --runtime=boxd \
+    --image=ghcr.io/me/my-agent:v1.2.0
 ```
 
-When `image` is set:
+When `--image` is set:
 - No source upload.
 - No `pip install` step.
 - The image's `CMD` starts the agent.

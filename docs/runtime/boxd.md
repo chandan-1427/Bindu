@@ -1,6 +1,6 @@
 # Boxd runtime
 
-`runtime={"provider": "boxd", ...}` runs your bindu agent inside a
+`bindu deploy <script> --runtime=boxd` runs your bindu agent inside a
 [boxd](https://boxd.sh) microVM. The host process becomes a deploy tool;
 the agent serves traffic from its own VM with a public HTTPS URL.
 
@@ -11,30 +11,33 @@ the agent serves traffic from its own VM with a public HTTPS URL.
 - The runtime-boxd extra: `pip install 'bindu[runtime-boxd]'` (pulls
   [`boxd`](https://pypi.org/project/boxd/) from PyPI).
 
-## Config reference
+## CLI flag reference
 
-| Key | Type | Default | Meaning |
+| Flag | Type | Default | Meaning |
 |---|---|---|---|
-| `provider` | str | `"in-process"` | Set to `"boxd"` for VM mode. |
-| `image` | str | `None` | If set, **A1 mode**: VM is created from this image; no source ship. See [custom-image.md](custom-image.md). |
-| `vcpu` | int | `2` | vCPUs for the VM. |
-| `memory` | str | `"4G"` | RAM. Accepts boxd size strings (`"512M"`, `"4G"`, ...). |
-| `disk` | str | `"20G"` | Disk size. |
-| `auto_suspend` | int | `60` | Seconds of inactivity before boxd auto-suspends the VM. Used for `on_exit: "suspend"`. |
-| `on_exit` | str | `"suspend"` | Behavior on Ctrl-C: `"suspend"` (detach + auto-suspend), `"destroy"` (tear down VM), `"detach"` (leave running). |
-| `bindu_version` | str | `None` | Pin the bindu version installed in the VM. Defaults to latest from PyPI. |
-| `env` | dict | `{}` | Extra env vars merged into the VM agent's environment. |
+| `--runtime` | str | `boxd` | Runtime provider. |
+| `--name` | str | from script `config["name"]` | Override the agent name (e.g., for preview envs). |
+| `--image` | str | unset | If set, **A1 mode**: VM is created from this image; no source ship. See [custom-image.md](custom-image.md). |
+| `--vcpu` | int | `2` | vCPUs for the VM. |
+| `--memory` | str | `4G` | RAM. Accepts boxd size strings (`512M`, `4G`, ...). |
+| `--disk` | str | `20G` | Disk size. |
+| `--auto-suspend` | int | `60` | Seconds of inactivity before boxd auto-suspends the VM. Used for `--on-exit=suspend`. |
+| `--on-exit` | str | `suspend` | Behavior on Ctrl-C: `suspend` (detach + auto-suspend), `destroy` (tear down VM), `detach` (leave running). |
+| `--bindu-version` | str | unset | Pin the bindu version installed in the VM. Special value `local` ships the host's bindu source instead of pulling from PyPI (useful for testing patched bindu). |
+| `--env` | KEY=VALUE | — | Extra env var for the agent inside the VM (repeatable). |
 
 ## Lifecycle
 
-1. **First run:** host packages your project source, ships it to a fresh
-   VM, runs `pip install bindu` + your project's deps, exec's
+1. **First run:** `bindu deploy` runs your script once locally with a capture
+   sentinel set, so `bindufy()` returns the agent name without serving. The
+   CLI then packages your project source, ships it to a fresh VM, runs
+   `pip install bindu` + your project's deps, exec's
    `bindu serve --script <your-script>`, polls `/health` until ready.
    Cold path: ~10–30 seconds depending on dep weight.
-2. **Subsequent runs (same agent name):** host reuses the existing VM,
+2. **Subsequent runs (same agent name):** the CLI reuses the existing VM,
    updates source, restarts the agent. ~1–3 seconds.
-3. **Ctrl-C with `on_exit: "suspend"` (default):** host detaches; VM
-   auto-suspends after `auto_suspend` seconds of no traffic. Re-run to
+3. **Ctrl-C with `--on-exit=suspend` (default):** the CLI detaches; VM
+   auto-suspends after `--auto-suspend` seconds of no traffic. Re-run to
    resume.
 
 ## Identity and secrets
@@ -44,7 +47,7 @@ the agent serves traffic from its own VM with a public HTTPS URL.
   never shipped to the VM.
 - User secrets (`OPENAI_API_KEY`, etc.) ship via:
   - a `.env` file in your project root (committed to the source tarball)
-  - or the `env` field in the runtime config
+  - or repeated `--env KEY=VALUE` flags on `bindu deploy`
 
 ## Source packaging
 
@@ -70,6 +73,8 @@ to `.binduignore`.
 | Problem | Likely cause | Action |
 |---|---|---|
 | `BOXD_API_KEY or BOXD_TOKEN must be set` | No credentials in host env | `export BOXD_API_KEY=bxk_...` |
+| `script did not call bindufy()` | Entry script raised before reaching `bindufy()`, or doesn't call it at all | Run the script directly first (`python agent.py`) to see the underlying error |
 | `agent at <url> did not become healthy within 60s` | VM up but agent failed to start | `bindu logs <agent>` and inspect; common causes: missing dependency, syntax error in your script, port 3773 already in use inside VM |
 | `pip install` failure | Dep not on PyPI, native build fails | Switch to A1 (custom image) and install the dep at image-build time |
 | Source >50 MB | Large data files included | Add to `.binduignore` |
+| Old bindu in VM rejects new features | Published bindu lags the host's | Pass `--bindu-version=local` to ship the host's source instead |

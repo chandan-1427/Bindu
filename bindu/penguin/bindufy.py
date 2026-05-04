@@ -609,89 +609,12 @@ def _bindufy_core(
     return _manifest
 
 
-def _deploy_to_runtime(
-    config: Dict[str, Any],
-    runtime_config: Any,
-    caller_dir: Path,
-) -> None:
-    """Deploy the agent via the configured RuntimeProvider, then supervise."""
-    import asyncio
-
-    import bindu.runtime as _runtime_module
-    from bindu.runtime.source_packager import find_project_root
-
-    agent_name = config.get("name") or config.get("id")
-    if not agent_name:
-        raise ValueError("config must include 'name' for runtime deployment")
-
-    source_dir = find_project_root(caller_dir)
-    provider = _runtime_module.get_provider(runtime_config.provider)
-
-    async def _run() -> None:
-        handle = await provider.deploy(
-            agent_name=agent_name,
-            source_dir=source_dir,
-            config=runtime_config,
-            env=None,
-        )
-        print(f"\n✓ {agent_name} serving at {handle.url}\n", flush=True)
-        await _supervise(provider, handle, runtime_config)
-
-    asyncio.run(_run())
-
-
-async def _supervise(provider: Any, handle: Any, runtime_config: Any) -> None:
-    """Stream VM logs to host stdout; block until SIGINT; apply on_exit."""
-    import asyncio
-    import signal
-
-    log_task = asyncio.create_task(_pipe_logs(provider, handle))
-
-    stop = asyncio.Event()
-    loop = asyncio.get_event_loop()
-
-    def _on_signal() -> None:
-        stop.set()
-
-    try:
-        loop.add_signal_handler(signal.SIGINT, _on_signal)
-        loop.add_signal_handler(signal.SIGTERM, _on_signal)
-    except NotImplementedError:
-        # Windows / restricted envs lack add_signal_handler.
-        pass
-
-    try:
-        await stop.wait()
-    finally:
-        log_task.cancel()
-        try:
-            await log_task
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.warning(f"log streaming task failed: {e}")
-        await provider.on_exit(handle, runtime_config.on_exit)
-
-
-async def _pipe_logs(provider: Any, handle: Any) -> None:
-    """Pipe VM logs to host stdout, prefixed with the agent name."""
-    prefix = f"[{handle.name}] "
-    try:
-        async for chunk in provider.stream_logs(handle, follow=True):
-            text = chunk.decode("utf-8", errors="replace")
-            for line in text.splitlines():
-                print(prefix + line, flush=True)
-    except Exception as e:
-        logger.warning(f"{prefix}log stream ended: {e}")
-
-
 def bindufy(
     config: Dict[str, Any],
     handler: Callable[[list[dict[str, str]]], Any],
     run_server: bool = True,
     key_dir: str | Path | None = None,
     launch: bool = False,
-    runtime: Dict[str, Any] | None = None,
 ) -> AgentManifest | None:
     """Transform an agent handler into a Bindu microservice.
 
@@ -756,11 +679,6 @@ def bindufy(
             "HandlerError: 'handler' must be a callable function or coroutine function."
         )
 
-    # Validate runtime config up front so misconfiguration fails fast.
-    from bindu.runtime import RuntimeConfig
-
-    runtime_config = RuntimeConfig.from_dict(runtime)
-
     # Get caller information for file paths
     frame = inspect.currentframe()
     if not frame or not frame.f_back:
@@ -769,14 +687,19 @@ def bindufy(
     caller_file = inspect.getframeinfo(frame.f_back).filename
     caller_dir = Path(os.path.abspath(caller_file)).parent
 
-    # Runtime-mode dispatch: when a non-default provider is configured, the
-    # agent runs elsewhere. Hand off to the provider; do not start a local
-    # server here.
-    if runtime_config.provider != "in-process":
-        _deploy_to_runtime(
-            config=config,
-            runtime_config=runtime_config,
-            caller_dir=caller_dir,
+    # Capture sentinel: when set by ``bindu deploy``, dump the agent name and
+    # source directory to JSON so the deploy CLI can package + ship the agent
+    # without re-implementing config in flag-land. Returning here skips all
+    # heavy runtime setup (DID, server, etc.) on the host. Inside the deployed
+    # VM the env var is unset, so ``bindufy()`` runs normally.
+    if capture_path := os.environ.get("BINDU_DEPLOY_CAPTURE"):
+        import json
+
+        agent_name = config.get("name") or config.get("id")
+        if not agent_name:
+            raise ValueError("config must include 'name' for runtime deployment")
+        Path(capture_path).write_text(
+            json.dumps({"agent_name": agent_name, "caller_dir": str(caller_dir)})
         )
         return None
 

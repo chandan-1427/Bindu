@@ -1,33 +1,31 @@
-"""Tests for bindufy() runtime dispatch."""
+"""Tests for bindufy()'s deploy-capture sentinel.
 
-from unittest.mock import AsyncMock, MagicMock
+When ``BINDU_DEPLOY_CAPTURE=<path>`` is set by ``bindu deploy``, bindufy
+must dump the agent name and caller_dir to JSON and return without
+performing any heavy runtime setup.
+"""
+
+import json
+import sys
+from unittest.mock import MagicMock
 
 import pytest
 
-from bindu.runtime.base import RuntimeHandle
 
-
-def test_bindufy_default_uses_in_process(monkeypatch):
-    """Without runtime= in config, bindufy uses today's _bindufy_core path."""
-    import sys
-
+def test_bindufy_default_runs_core(monkeypatch):
+    """No capture sentinel set → bindufy delegates to _bindufy_core normally."""
     import bindu.penguin.bindufy  # noqa: F401  ensure submodule imported
-    import bindu.runtime as br
 
     bm = sys.modules["bindu.penguin.bindufy"]
+    monkeypatch.delenv("BINDU_DEPLOY_CAPTURE", raising=False)
 
-    called = {"core": False, "deploy": False}
+    called = {"core": False}
 
     def fake_core(**kwargs):
         called["core"] = True
         return MagicMock()
 
-    def fake_get_provider(name):
-        called["deploy"] = True
-        return MagicMock()
-
     monkeypatch.setattr(bm, "_bindufy_core", fake_core)
-    monkeypatch.setattr(br, "get_provider", fake_get_provider)
 
     config = {
         "author": "test@example.com",
@@ -36,80 +34,47 @@ def test_bindufy_default_uses_in_process(monkeypatch):
     }
     bm.bindufy(config, lambda messages: "hi", run_server=False)
     assert called["core"] is True
-    assert called["deploy"] is False
 
 
-def test_bindufy_with_runtime_dispatches_to_provider(monkeypatch):
-    """runtime={'provider': 'boxd'} → call provider.deploy, not _bindufy_core."""
-    import sys
-
-    import bindu.penguin.bindufy  # noqa: F401  ensure submodule imported
-    import bindu.runtime as br
+def test_bindufy_with_capture_writes_json_and_returns(monkeypatch, tmp_path):
+    """Capture env var set → bindufy writes name + caller_dir, skips core."""
+    import bindu.penguin.bindufy  # noqa: F401
 
     bm = sys.modules["bindu.penguin.bindufy"]
 
-    called = {"core": False, "deploy": False}
+    capture_path = tmp_path / "captured.json"
+    monkeypatch.setenv("BINDU_DEPLOY_CAPTURE", str(capture_path))
+
+    called = {"core": False}
 
     def fake_core(**kwargs):
         called["core"] = True
 
-    def fake_get_provider(name):
-        provider = MagicMock()
-
-        async def deploy(*a, **kw):
-            called["deploy"] = True
-            return RuntimeHandle("test-agent", "https://test-agent.boxd.sh", "boxd", {})
-
-        provider.deploy = deploy
-
-        async def stream_logs(*a, **kw):
-            return
-            yield  # noqa
-
-        provider.stream_logs = stream_logs
-        provider.on_exit = AsyncMock()
-        return provider
-
     monkeypatch.setattr(bm, "_bindufy_core", fake_core)
-    monkeypatch.setattr(br, "get_provider", fake_get_provider)
-
-    async def fake_supervise(*a, **kw):
-        return
-
-    monkeypatch.setattr(bm, "_supervise", fake_supervise)
 
     config = {
         "author": "test@example.com",
         "name": "test-agent",
         "deployment": {"url": "http://localhost:3773"},
     }
-    bm.bindufy(
-        config,
-        lambda messages: "hi",
-        run_server=False,
-        runtime={"provider": "boxd"},
-    )
-    assert called["deploy"] is True
+    result = bm.bindufy(config, lambda messages: "hi", run_server=False)
+
+    assert result is None
     assert called["core"] is False
+    assert capture_path.exists()
+    data = json.loads(capture_path.read_text())
+    assert data["agent_name"] == "test-agent"
+    assert "caller_dir" in data
 
 
-def test_bindufy_invalid_runtime_raises(monkeypatch):
-    """Bad runtime config should fail fast at bindufy() call."""
-    import sys
-
+def test_bindufy_capture_requires_name(monkeypatch, tmp_path):
+    """Capture mode raises if config has no name/id (deploy needs a name)."""
     import bindu.penguin.bindufy  # noqa: F401
-    from bindu.runtime import RuntimeConfigError
 
     bm = sys.modules["bindu.penguin.bindufy"]
 
-    config = {
-        "author": "test@example.com",
-        "name": "test-agent",
-        "deployment": {"url": "http://localhost:3773"},
-    }
-    with pytest.raises(RuntimeConfigError):
-        bm.bindufy(
-            config,
-            lambda messages: "hi",
-            runtime={"provider": "totally-fake"},
-        )
+    monkeypatch.setenv("BINDU_DEPLOY_CAPTURE", str(tmp_path / "captured.json"))
+
+    config = {"author": "test@example.com"}  # no name / id
+    with pytest.raises(ValueError, match="name"):
+        bm.bindufy(config, lambda messages: "hi", run_server=False)
