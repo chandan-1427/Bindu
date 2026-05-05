@@ -35,6 +35,12 @@ APP_DIR = "/home/boxd/app"
 # Where we stage the host's bindu source when ``bindu_version == "local"``.
 BINDU_SRC_DIR = "/home/boxd/bindu_source"
 
+# Where the in-VM agent's stdout/stderr go. Streamed back to the host on
+# demand via ``stream_logs`` (using ``tail -F`` over ``box.exec(stream=True)``
+# until boxd ships server-side ``StreamLogs``).
+AGENT_LOG_PATH = "/tmp/bindu-agent.log"  # nosec B108 — single-tenant VM
+AGENT_PID_PATH = "/tmp/bindu-agent.pid"  # nosec B108 — single-tenant VM
+
 # Repo paths excluded when shipping the host's bindu source to a VM:
 # nothing here is needed by ``pip install -e .`` for the Python package.
 # Keeping the tarball small avoids hitting boxd's gRPC message size limit.
@@ -288,21 +294,20 @@ class BoxdRuntimeProvider(RuntimeProvider):
         if public_url:
             merged_env["BINDU_PUBLIC_URL"] = public_url
 
-        pidfile = "/tmp/bindu-agent.pid"  # nosec B108 — single-tenant VM
         # Step 1: graceful TERM + 5s wait + SIGKILL on the prior agent. Run
         # as its own exec so the next command sees a clean process table.
         # Combining this with the start command into one shell line confuses
         # ``&``/``&&`` precedence and ends up backgrounding the wrong subshell.
         kill_old = (
-            f"if [ -f {pidfile} ]; then "
-            f"  OLD=$(cat {pidfile}); "
+            f"if [ -f {AGENT_PID_PATH} ]; then "
+            f"  OLD=$(cat {AGENT_PID_PATH}); "
             f"  kill $OLD 2>/dev/null || true; "
             f"  for _ in 1 2 3 4 5; do "
             f"    kill -0 $OLD 2>/dev/null || break; "
             f"    sleep 1; "
             f"  done; "
             f"  kill -9 $OLD 2>/dev/null || true; "
-            f"  rm -f {pidfile}; "
+            f"  rm -f {AGENT_PID_PATH}; "
             f"fi"
         )
         await _exec_or_raise(
@@ -316,8 +321,8 @@ class BoxdRuntimeProvider(RuntimeProvider):
         start = (
             f"cd {APP_DIR} && "
             f"setsid nohup python3 {APP_DIR}/{script} "
-            f"> /tmp/bindu-agent.log 2>&1 < /dev/null & "
-            f"echo $! > {pidfile}"
+            f"> {AGENT_LOG_PATH} 2>&1 < /dev/null & "
+            f"echo $! > {AGENT_PID_PATH}"
         )
         await _exec_or_raise(
             box,
@@ -443,11 +448,30 @@ class BoxdRuntimeProvider(RuntimeProvider):
     async def stream_logs(
         self, handle: RuntimeHandle, follow: bool = True
     ) -> AsyncIterator[bytes]:
-        """Yield log chunks streamed from the VM's console."""
+        """Yield chunks of the in-VM agent's stdout/stderr.
+
+        boxd 0.1.x's server-side ``StreamLogs`` is unimplemented, so we tail
+        ``AGENT_LOG_PATH`` over a streaming exec instead. ``tail -F`` is
+        deliberate: it keeps polling when the file is missing or rotates,
+        which matches the agent's startup window (the file appears as soon
+        as the python3 process opens it for redirect).
+        """
         async with _make_compute() as compute:
             box = await compute.box.get(handle.name)
-            async for chunk in box.stream_logs(follow=follow):
-                yield chunk
+            args = (
+                ("tail", "-n", "+1", "-F", AGENT_LOG_PATH)
+                if follow
+                else ("sh", "-c", f"cat {AGENT_LOG_PATH} 2>/dev/null || true")
+            )
+            proc = await box.exec(*args, stream=True)
+            try:
+                async for chunk in proc.stdout:
+                    yield chunk
+            finally:
+                # Async-iterator GC + exec-stream close should kill the
+                # remote ``tail`` when the consumer stops iterating; nothing
+                # else to do on the host.
+                pass
 
     async def on_exit(
         self,

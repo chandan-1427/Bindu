@@ -7,17 +7,33 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_logs_streams_to_stdout(capsys):
-    """`bindu logs my-agent` should pipe VM logs to stdout."""
+    """`bindu logs my-agent` tails the in-VM agent log and pipes to stdout.
+
+    Server-side ``StreamLogs`` is unimplemented in boxd 0.1.x; the CLI
+    works around it by ``tail -F``-ing the known agent log path inside
+    the VM via a streaming exec.
+    """
     from bindu.cli import _handle_logs
 
-    fake_box = MagicMock()
     chunks = [b"hello\n", b"world\n"]
 
-    async def fake_stream(follow=True):
-        for c in chunks:
-            yield c
+    class _Stdout:
+        def __init__(self, cs):
+            self._cs = list(cs)
 
-    fake_box.stream_logs = fake_stream
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            if not self._cs:
+                raise StopAsyncIteration
+            return self._cs.pop(0)
+
+    fake_proc = MagicMock()
+    fake_proc.stdout = _Stdout(chunks)
+
+    fake_box = MagicMock()
+    fake_box.exec = AsyncMock(return_value=fake_proc)
 
     fake_compute = MagicMock()
     fake_compute.box.get = AsyncMock(return_value=fake_box)
@@ -25,11 +41,14 @@ async def test_logs_streams_to_stdout(capsys):
     fake_compute.__aexit__ = AsyncMock()
 
     with patch("bindu.cli._make_compute", return_value=fake_compute):
-        await _handle_logs("my-agent", follow=False)
+        await _handle_logs("my-agent", follow=True)
 
     out = capsys.readouterr().out
     assert "hello" in out
     assert "world" in out
+    call = fake_box.exec.await_args
+    assert call.kwargs.get("stream") is True
+    assert "-F" in call.args  # follow=True → tail -F
 
 
 @pytest.mark.asyncio

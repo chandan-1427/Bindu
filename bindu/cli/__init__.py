@@ -82,10 +82,24 @@ def _make_compute(**kw: Any) -> Any:
 
 
 async def _handle_logs(agent_name: str, follow: bool = True) -> None:
-    """Stream VM logs for the given agent to stdout."""
+    """Stream the in-VM agent's stdout/stderr to the host terminal.
+
+    Uses ``tail -F`` over a streaming exec because boxd 0.1.x's server-side
+    ``StreamLogs`` RPC is not yet implemented. The agent's stdout/stderr
+    is captured to a known path by the runtime provider when it starts the
+    process; we just tail that file.
+    """
+    from bindu.runtime.boxd_provider import AGENT_LOG_PATH
+
     async with _make_compute() as compute:
         box = await compute.box.get(agent_name)
-        async for chunk in box.stream_logs(follow=follow):
+        args = (
+            ("tail", "-n", "+1", "-F", AGENT_LOG_PATH)
+            if follow
+            else ("sh", "-c", f"cat {AGENT_LOG_PATH} 2>/dev/null || true")
+        )
+        proc = await box.exec(*args, stream=True)
+        async for chunk in proc.stdout:
             sys.stdout.write(chunk.decode("utf-8", errors="replace"))
             sys.stdout.flush()
 

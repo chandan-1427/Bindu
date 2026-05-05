@@ -81,7 +81,11 @@ to `.binduignore`.
 
 ## Dev DX
 
-- `bindu logs <agent>` — stream the agent's VM logs to your terminal.
+- `bindu logs <agent>` — stream the agent's stdout/stderr to your terminal.
+  Implemented as a ``tail -F`` of the in-VM agent log over a streaming exec,
+  because boxd 0.1.x's server-side ``StreamLogs`` RPC is not yet implemented.
+  The upside: you only see the agent's own output, not kernel/boot noise.
+  Pass ``--no-follow`` to print what's there now and exit.
 - `bindu shell <agent>` — open an interactive shell on the agent's VM
   (`/app` is the working directory).
 

@@ -702,16 +702,34 @@ async def test_on_exit_detach_is_pure_noop(mock_boxd, fake_box, boxd_api_key):
     mock_boxd.box.get.assert_not_awaited()
 
 
+def _exec_proc_with_chunks(chunks):
+    """Build a fake ``ExecProcess`` whose .stdout yields the given chunks."""
+
+    class _Stdout:
+        def __init__(self, cs):
+            self._cs = list(cs)
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            if not self._cs:
+                raise StopAsyncIteration
+            return self._cs.pop(0)
+
+    proc = MagicMock()
+    proc.stdout = _Stdout(chunks)
+    return proc
+
+
 @pytest.mark.asyncio
-async def test_stream_logs_yields_chunks(mock_boxd, fake_box, boxd_api_key):
-    """stream_logs(follow=True) passes through box.stream_logs output."""
-    chunks = [b"hello\n", b"world\n"]
+async def test_stream_logs_tails_agent_log(mock_boxd, fake_box, boxd_api_key):
+    """stream_logs(follow=True) issues ``tail -F AGENT_LOG_PATH`` over a
+    streaming exec, and passes the chunks through unchanged."""
+    from bindu.runtime.boxd_provider import AGENT_LOG_PATH
 
-    async def fake_gen(follow=False):
-        for c in chunks:
-            yield c
-
-    fake_box.stream_logs = fake_gen
+    chunks = [b"agent up\n", b"served /\n"]
+    fake_box.exec = AsyncMock(return_value=_exec_proc_with_chunks(chunks))
     mock_boxd.box.get.return_value = fake_box
 
     p = BoxdRuntimeProvider()
@@ -719,4 +737,31 @@ async def test_stream_logs_yields_chunks(mock_boxd, fake_box, boxd_api_key):
     out = []
     async for chunk in p.stream_logs(h, follow=True):
         out.append(chunk)
+
     assert out == chunks
+    call = fake_box.exec.await_args
+    assert call.args[0] == "tail"
+    assert "-F" in call.args
+    assert AGENT_LOG_PATH in call.args
+    assert call.kwargs.get("stream") is True
+
+
+@pytest.mark.asyncio
+async def test_stream_logs_no_follow_uses_cat(mock_boxd, fake_box, boxd_api_key):
+    """stream_logs(follow=False) prints current contents and ends.
+
+    Implementation uses ``sh -c "cat ... 2>/dev/null || true"`` so a missing
+    log file doesn't surface a confusing exec error.
+    """
+    fake_box.exec = AsyncMock(return_value=_exec_proc_with_chunks([b"static\n"]))
+    mock_boxd.box.get.return_value = fake_box
+
+    p = BoxdRuntimeProvider()
+    h = RuntimeHandle("my-agent", "https://my-agent.boxd.sh", "boxd", {})
+    out = [chunk async for chunk in p.stream_logs(h, follow=False)]
+    assert out == [b"static\n"]
+    call = fake_box.exec.await_args
+    # Either tail-without-F or cat with a no-error wrapper is fine; check that
+    # the streamed command does NOT contain ``-F`` (which would tail forever).
+    assert "-F" not in call.args
+    assert call.kwargs.get("stream") is True
