@@ -54,6 +54,8 @@ uv sync --dev
 
 To run the examples you'll need an API key for at least one LLM provider — `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `MINIMAX_API_KEY`.
 
+<br/>
+
 ## Quickstart
 
 Build the agent you want, hand it to `bindufy()`, and it's online. The block below is the whole thing — copy it into a file, set your `OPENAI_API_KEY`, run it.
@@ -142,6 +144,8 @@ Then poll `tasks/get` with the same `taskId` until state hits `completed`.
 
 </details>
 
+<br/>
+
 ## Features
 
 Every row here links out to the guide that actually goes into it.
@@ -163,6 +167,8 @@ Every row here links out to the guide that actually goes into it.
 | **Gateway** | A planner LLM that orchestrates a fleet of agents over A2A and streams the result back. | [GATEWAY.md](docs/GATEWAY.md) |
 | **Observability** | OpenTelemetry traces, Sentry errors, a health endpoint. The boring stuff that saves you at 2am. | [OBSERVABILITY.md](docs/OBSERVABILITY.md) |
 
+<br/>
+
 ## Demo
 
 <div align="center">
@@ -172,6 +178,8 @@ Every row here links out to the guide that actually goes into it.
 </div>
 
 There's also a built-in chat UI. Run `cd frontend && npm run dev` and open `http://localhost:5173`.
+
+<br/>
 
 ## Examples
 
@@ -187,11 +195,15 @@ A handful from [`examples/`](examples/):
 
 There are 20+ more covering CSV analysis, PDF Q&A, speech-to-text, web scraping, multi-lingual collaboration, blog writing, and so on. Browse them in [`examples/`](examples/).
 
+<br/>
+
 ## Why we built Bindu
 
 We're using Bindu in production to build the **Trade Compliance OS** — a swarm of agents that handles CBAM, EUDR, HS codes, and Digital Product Passports, so an SMB can ship coffee, textiles, or steel across borders without writing a six-figure check to a law firm. Every agent in that swarm is bindufied. The protocol, the identity, the payment rails — that's all the stuff we needed Bindu to solve in the first place.
 
 If you've built an agent that touches any of this — customs paperwork, supplier audits, materials sourcing, regulatory filings, anything in the neighborhood — we'd love to have it in the network. [Come find us on Discord](https://discord.gg/3w5zuYUuwt) and let's talk.
+
+<br/>
 
 ## Supported frameworks
 
@@ -206,6 +218,8 @@ Bring whatever you already like writing agents in. Bindu doesn't care what's ins
 
 If your model provider speaks the OpenAI or Anthropic API, it works — [OpenRouter](https://openrouter.ai/), [OpenAI](https://platform.openai.com/), [MiniMax](https://platform.minimaxi.com), and the rest.
 
+<br/>
+
 ## Documentation
 
 - [Full docs site](https://docs.getbindu.com)
@@ -216,6 +230,8 @@ If your model provider speaks the OpenAI or Anthropic API, it works — [OpenRou
 - [Known issues](bugs/known-issues.md) — read this before you push to production
 - [Troubleshooting](docs/AUTHENTICATION.md#troubleshooting) — the errors you'll hit, and how to get past them
 
+<br/>
+
 ## Testing
 
 ```bash
@@ -223,6 +239,8 @@ uv run pytest tests/unit/ -v                                    # fast unit test
 uv run pytest tests/integration/grpc/ -v -m e2e                 # gRPC E2E
 uv run pytest -n auto --cov=bindu --cov-report=term-missing     # full suite
 ```
+
+<br/>
 
 ## Contributing
 
@@ -236,15 +254,34 @@ pre-commit run --all-files
 
 The full guide is in [`.github/contributing.md`](.github/contributing.md). Most of the day-to-day back-and-forth happens on [Discord](https://discord.gg/3w5zuYUuwt) — come say hi.
 
+<br/>
+
 ## Maintainers
 
 <table>
   <tr>
-    <td align="center"><a href="https://github.com/raahulrahl"><sub><b>Raahul Dutta</b></sub></a></td>
-    <td align="center"><a href="https://github.com/Paraschamoli"><sub><b>Paras Chamoli</b></sub></a></td>
-    <td align="center"><a href="https://github.com/chandan-1427"><sub><b>Chandan</b></sub></a></td>
+    <td align="center">
+      <a href="https://github.com/raahulrahl">
+        <img src="https://github.com/raahulrahl.png?size=120" width="100" alt="Raahul Dutta" /><br />
+        <sub><b>Raahul Dutta</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Paraschamoli">
+        <img src="https://github.com/Paraschamoli.png?size=120" width="100" alt="Paras Chamoli" /><br />
+        <sub><b>Paras Chamoli</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/chandan-1427">
+        <img src="https://github.com/chandan-1427.png?size=120" width="100" alt="Chandan" /><br />
+        <sub><b>Chandan</b></sub>
+      </a>
+    </td>
   </tr>
 </table>
+
+<br/>
 
 ## Acknowledgements
 
@@ -252,11 +289,15 @@ Bindu stands on the shoulders of a lot of good open source:
 
 [FastA2A](https://github.com/pydantic/fasta2a) · [A2A](https://github.com/a2aproject/A2A) · [x402](https://github.com/coinbase/x402) · [Hugging Face chat-ui](https://github.com/huggingface/chat-ui) · [12 Factor Agents](https://github.com/humanlayer/12-factor-agents) · [OpenCode](https://github.com/anomalyco/opencode) · [OpenMoji](https://openmoji.org/) · [ASCII Space Art](https://www.asciiart.eu/space/other)
 
+<br/>
+
 ## Star history
 
 <a href="https://star-history.com/#getbindu/Bindu&Date">
   <img src="https://api.star-history.com/svg?repos=getbindu/Bindu&type=Date" alt="Star history">
 </a>
+
+<br/>
 
 ## License
 
