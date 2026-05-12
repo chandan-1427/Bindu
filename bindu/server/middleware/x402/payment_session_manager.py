@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from dataclasses import dataclass, field
 
-from x402.types import PaymentPayload
+from x402 import PaymentPayload
 
 from bindu.utils.logging import get_logger
 

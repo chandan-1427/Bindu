@@ -1,6 +1,15 @@
 # Known Issues
 
-_Last updated: 2026-04-26 — `hydra-token-cache-revocation-lag` removed. The Hydra middleware now skips its introspection cache for sensitive scopes (`admin`, `agent:execute`, `payment:capture`, `key:rotate`) and exposes `invalidate_token_cache` / `revoke_token` for in-process invalidation. See [`core/2026-04-26-hydra-token-cache-revocation-lag.md`](./core/2026-04-26-hydra-token-cache-revocation-lag.md). Previously: 2026-04-20 — recipes/SSE/DID work on branch `feat/gateway-recipes` added 15 gateway entries (5 medium, 6 low, 5 nit) and narrowed two existing ones (`tool-name-collisions-silent` → `parse-agent-from-tool-greedy-mismatch`, `signature-verification-ok-when-unsigned` → `signature-verification-non-text-parts-unverified`) to the residual sub-bugs after partial resolutions landed. `did-document-endpoint-returns-raw-dict` removed — see [`core/2026-04-19-did-document-endpoint-raw-dict.md`](./core/2026-04-19-did-document-endpoint-raw-dict.md)._
+_Last updated: 2026-05-12 — Four x402 payment-bypass entries removed
+(`x402-middleware-fails-open-on-body-parse`, `x402-no-replay-prevention`,
+`x402-no-signature-verification`,
+`x402-balance-check-skipped-on-missing-contract-code`). The middleware
+was rewritten against x402 SDK v2 (`x402ResourceServer.verify_payment`
+replaces the hand-rolled `_validate_payment_manually`) and a new
+Redis-backed nonce store (`bindu/server/middleware/x402/nonce_store.py`)
+enforces replay prevention before the facilitator round-trip. See
+[`core/2026-05-12-x402-v2-migration-hardening.md`](./core/2026-05-12-x402-v2-migration-hardening.md).
+Previously: 2026-04-26 — `hydra-token-cache-revocation-lag` removed. The Hydra middleware now skips its introspection cache for sensitive scopes (`admin`, `agent:execute`, `payment:capture`, `key:rotate`) and exposes `invalidate_token_cache` / `revoke_token` for in-process invalidation. See [`core/2026-04-26-hydra-token-cache-revocation-lag.md`](./core/2026-04-26-hydra-token-cache-revocation-lag.md). 2026-04-20 — recipes/SSE/DID work on branch `feat/gateway-recipes` added 15 gateway entries (5 medium, 6 low, 5 nit) and narrowed two existing ones (`tool-name-collisions-silent` → `parse-agent-from-tool-greedy-mismatch`, `signature-verification-ok-when-unsigned` → `signature-verification-non-text-parts-unverified`) to the residual sub-bugs after partial resolutions landed. `did-document-endpoint-returns-raw-dict` removed — see [`core/2026-04-19-did-document-endpoint-raw-dict.md`](./core/2026-04-19-did-document-endpoint-raw-dict.md)._
 
 This file is user-facing. It's the first thing a new contributor or
 operator reads to calibrate expectations: what Bindu doesn't do
@@ -42,7 +51,7 @@ Issue referencing the slug (e.g. "Fixes `context-window-hardcoded`").
 | Subsystem | High | Medium | Low | Nit |
 |---|---:|---:|---:|---:|
 | [Gateway](#gateway) | 2 | 14 | 19 | 9 |
-| [Bindu Core (Python)](#bindu-core-python) | 4 | 6 | 2 | 0 |
+| [Bindu Core (Python)](#bindu-core-python) | 0 | 6 | 2 | 0 |
 | [SDKs (TypeScript)](#sdks-typescript) | — | — | — | — |
 | [Frontend](#frontend) | — | — | — | — |
 
@@ -917,10 +926,6 @@ explains it.
 
 | Slug | Severity | One-line |
 |---|---|---|
-| [`x402-middleware-fails-open-on-body-parse`](#x402-middleware-fails-open-on-body-parse) | high (sec) | Malformed body parse lets request through without payment |
-| [`x402-no-replay-prevention`](#x402-no-replay-prevention) | high (sec) | Payment proofs are reusable until `validBefore` |
-| [`x402-no-signature-verification`](#x402-no-signature-verification) | high (sec) | EIP-3009 authorization signature is never verified |
-| [`x402-balance-check-skipped-on-missing-contract-code`](#x402-balance-check-skipped-on-missing-contract-code) | high (sec) | Missing RPC contract-code silently skips balance check |
 | [`authz-scope-check-behind-optional-flag`](#authz-scope-check-behind-optional-flag) | medium (sec) | Scope check is optional; flipping the flag removes all authz |
 | [`did-admission-control-missing`](#did-admission-control-missing) | medium (sec) | No allowlist — any Hydra-registered DID can call |
 | [`cors-allow-credentials-with-user-origins`](#cors-allow-credentials-with-user-origins) | medium (sec) | Credentials + loose origins risk credentialed CORS |
@@ -928,134 +933,6 @@ explains it.
 | [`no-rate-limit-or-quota-per-caller`](#no-rate-limit-or-quota-per-caller) | medium | No per-caller quota; single caller can exhaust resources |
 | [`context-id-silent-fallback`](#context-id-silent-fallback) | medium | Malformed `context_id` silently creates a new context |
 | [`artifact-name-not-sanitized`](#artifact-name-not-sanitized) | low (sec) | Agent-supplied artifact names not basenamed |
-
-### High
-
-### x402-middleware-fails-open-on-body-parse
-
-**Severity:** high (security, payment bypass)
-
-> **Scenario.** An attacker sends a malformed JSON body (truncated,
-> wrong encoding, bad UTF-8) to a x402-protected endpoint. Python's
-> `json.loads` throws. The middleware's bare `except Exception:`
-> catches it — and calls `await call_next(request)` anyway. The
-> request reaches the agent. The agent runs. No payment was checked.
-
-**What's wrong.** The x402 payment middleware at
-[`bindu/server/middleware/x402/x402_middleware.py`](../bindu/server/middleware/x402/x402_middleware.py)
-lines 213–215 wraps the initial JSON-RPC body parse in
-`except Exception` and calls `call_next(request)` on failure. Any
-client that can cause the parse to throw reaches the agent without
-a payment check. The bare `except` also masks real bugs during
-parsing. Adjacent concern: the subsequent check is
-`if method not in app_settings.x402.protected_methods`, so a
-request that parses but reports an unknown method also bypasses
-payment.
-
-**Workaround.** Configure x402 only when no protected methods can
-be avoided by crafting the request body; otherwise treat the x402
-middleware as advisory. The fix is to return a 402 response on
-parse failure and narrow the exception to `json.JSONDecodeError`
-and `UnicodeDecodeError`.
-
-**Tracking:** _(no issue yet)_
-
-### x402-no-replay-prevention
-
-**Severity:** high (security, payment bypass)
-
-> **Scenario.** Alice pays $10 once. The server returns her a
-> payment token. She puts it in `X-PAYMENT` for Request A — valid,
-> task runs, she's charged $10 on-chain. She puts the **same token**
-> in `X-PAYMENT` for Request B — still valid, task runs, **no
-> additional charge.** And Request C. And D. All until the
-> `validBefore` window closes (seconds to minutes). One payment
-> buys unlimited work.
-
-**What's wrong.** `_validate_payment_manually` in
-[`bindu/server/middleware/x402/x402_middleware.py`](../bindu/server/middleware/x402/x402_middleware.py)
-lines 282–394 performs five checks (scheme, authorization presence,
-amount-minimum, network match, on-chain balance) but never records
-or looks up the `(nonce, payer)` or `(txhash, chain)`. The same
-`X-PAYMENT` header is accepted on every request and the payment
-session token returned by
-[`bindu/server/endpoints/payment_sessions.py`](../bindu/server/endpoints/payment_sessions.py)
-is never marked consumed.
-
-**Workaround.** Set short `validBefore` windows on the EIP-3009
-authorization issued to clients, reducing the replay window to
-seconds. The real fix is to persist `(nonce, payer_address)` in a
-dedupe store (Redis `SETNX` keyed by nonce, TTL ≥ `validBefore`)
-and reject any payload whose nonce is already present.
-
-**Tracking:** _(no issue yet)_
-
-### x402-no-signature-verification
-
-**Severity:** high (security, payment forgery)
-
-> **Scenario.** Mallory looks up Alice's public wallet address
-> on-chain (it's public). She knows Alice holds USDC. Mallory
-> constructs a plausible-looking EIP-3009 `TransferWithAuthorization`
-> payload claiming Alice's address as payer, with any amount she
-> wants, **and any signature bytes she feels like pasting in.** She
-> sends it to the agent. The middleware checks: scheme ✓, network
-> ✓, amount ✓, Alice has a balance ✓ — **never verifies the
-> signature.** Request accepted. Mallory gets work; Alice sees no
-> charge (the forged authorization doesn't clear on-chain) but the
-> agent burned its compute anyway.
-
-**What's wrong.** The validation routine at
-[`bindu/server/middleware/x402/x402_middleware.py`](../bindu/server/middleware/x402/x402_middleware.py)
-lines 282–394 checks amount, network, and payer balance but never
-verifies the EIP-3009 `TransferWithAuthorization` signature against
-the payer's address. The docstring at line 292 even labels the
-signature check "optional" — and the actual call doesn't verify it.
-Combined with `x402-no-replay-prevention`, there is no
-cryptographic binding between the caller and the payment.
-
-**Workaround.** Do not rely on x402 for revenue protection in the
-current release. If revenue matters, sit x402 behind a proxy that
-verifies the signature out-of-band, or disable x402 and use a
-pre-paid credits model backed by an authenticated account. The fix
-is to call `eth_account.Account.recover_message` (or equivalent) on
-the EIP-3009 typed-data digest and reject if the recovered address
-does not match `auth.from_`.
-
-**Tracking:** _(no issue yet)_
-
-### x402-balance-check-skipped-on-missing-contract-code
-
-**Severity:** high (security, payment bypass)
-
-> **Scenario.** An operator sets `payment_requirements.asset` to the
-> wrong USDC contract address (typo, wrong chain). Or their RPC
-> provider has a transient outage and `eth.get_code()` returns empty
-> bytes. The middleware notices "no contract at this address" and
-> logs `"Skipping balance check"` — then **returns `True`** (valid
-> payment). An attacker with a zero-balance address can pay and get
-> work.
-
-**What's wrong.**
-[`bindu/server/middleware/x402/x402_middleware.py`](../bindu/server/middleware/x402/x402_middleware.py)
-lines 348–352 skip the on-chain balance check when
-`w3.eth.get_code` returns empty bytes. A misconfigured
-`payment_requirements.asset`, a transient RPC fault, or an operator
-pointing at a fork where the token is not yet deployed all cause
-the balance check to silently no-op. The outer `except Exception`
-at line 377 correctly fails closed if the balance call itself
-throws, but the "no code" branch is a logged warning and a
-fall-through to `return True`.
-
-**Workaround.** Monitor logs for
-`"No contract found at … Skipping balance check"` — if it appears
-in production, payment is effectively disabled. Pin a known-good
-RPC endpoint and verify the token address on startup. The fix is
-to reject payment (not skip) when the contract is not found, and
-to validate `asset` against a hardcoded list of known USDC
-addresses per chain at startup.
-
-**Tracking:** _(no issue yet)_
 
 ### Medium
 

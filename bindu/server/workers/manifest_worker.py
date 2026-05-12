@@ -33,7 +33,7 @@ from typing import Any, Callable, Optional
 from uuid import UUID
 
 from opentelemetry.trace import Status, StatusCode, get_current_span, get_tracer
-from x402.facilitator import FacilitatorClient, FacilitatorConfig
+from x402.http import FacilitatorConfig, HTTPFacilitatorClient
 
 from bindu.settings import app_settings
 
@@ -552,7 +552,7 @@ class ManifestWorker(Worker):
             Metadata dict containing settlement information to attach to task
         """
         try:
-            from x402.types import PaymentPayload, PaymentRequirements
+            from x402 import PaymentPayload, PaymentRequirements
 
             payment_payload_dict = payment_context["payment_payload"]
             payment_requirements_dict = payment_context["payment_requirements"]
@@ -563,9 +563,11 @@ class ManifestWorker(Worker):
                 payment_requirements_dict
             )
 
-            # Initialize facilitator client
-            facilitator = FacilitatorClient(
-                config=FacilitatorConfig(url=app_settings.x402.facilitator_url)
+            # Initialize a fresh facilitator client per settlement. The
+            # ResourceServer that holds a long-lived client for verify
+            # lives on the application instance and is not in scope here.
+            facilitator = HTTPFacilitatorClient(
+                FacilitatorConfig(url=app_settings.x402.facilitator_url)
             )
 
             # Settle payment

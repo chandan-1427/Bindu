@@ -18,13 +18,14 @@ Provides REST API endpoints for payment session management:
 from __future__ import annotations
 
 import base64
-import json
 
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
-from x402.encoding import safe_base64_decode
-from x402.paywall import get_paywall_html
-from x402.types import PaymentPayload
+
+from x402 import PaymentPayload, PaymentRequired
+from x402.http.paywall import create_paywall, evm_paywall
+from x402.schemas.helpers import parse_payment_payload
+from x402.schemas.payments import ResourceInfo
 
 from bindu.server.applications import BinduApplication
 from bindu.utils.logging import get_logger
@@ -109,8 +110,12 @@ async def payment_capture_endpoint(app: BinduApplication, request: Request) -> R
     if payment_token:
         # Payment completed - capture token
         try:
-            payment_dict = json.loads(safe_base64_decode(payment_token))
-            payment_payload = PaymentPayload.model_validate(payment_dict)
+            parsed = parse_payment_payload(payment_token.encode("utf-8"))
+            if not isinstance(parsed, PaymentPayload):
+                # v1 payloads are no longer supported on the verify side
+                # (middleware rejects them); reject here too for consistency.
+                raise ValueError("v1 payment payloads are no longer accepted")
+            payment_payload = parsed
 
             # Store payment in session (NOT consumed yet!)
             app._payment_session_manager.complete_session(session_id, payment_payload)
@@ -135,21 +140,17 @@ async def payment_capture_endpoint(app: BinduApplication, request: Request) -> R
             status_code=503,
         )
 
-    # Add session_id to resource URL
-
-    payment_reqs_with_session = []
-    for req in app._payment_requirements:
-        # Append session_id to resource URL using model_copy
-        updated_req = req.model_copy(
-            update={"resource": f"{req.resource}?session_id={session_id}"}
-        )
-        payment_reqs_with_session.append(updated_req)
-
-    html_content = get_paywall_html(
+    # v2: the resource URL is no longer per-requirement; it lives on the
+    # PaymentRequired wrapper's `resource` field. Build a fresh wrapper for
+    # this session — the requirements themselves stay shared.
+    payment_required = PaymentRequired(
         error="Complete payment to continue",
-        payment_requirements=payment_reqs_with_session,
-        paywall_config=app._paywall_config,
+        accepts=app._payment_requirements,
+        resource=ResourceInfo(url=f"{app.manifest.url}?session_id={session_id}"),
     )
+
+    paywall_provider = create_paywall().with_network(evm_paywall).build()
+    html_content = paywall_provider.generate_html(payment_required, app._paywall_config)
 
     return HTMLResponse(content=html_content, status_code=402)
 

@@ -317,30 +317,13 @@ class X402Settings(BaseSettings):
     status_completed: str = "payment-completed"
     status_failed: str = "payment-failed"
 
-    # RPC URLs by network
-    # Always look https://chainlist.org/chain/84532?testnets=true for latest RPC URLs
-    rpc_urls_by_network: dict[str, list[str]] = {
-        "base-sepolia": [
-            "https://sepolia.base.org",  # Official Base Sepolia
-            "https://base-sepolia.public.blastapi.io",  # Blast public API
-            "https://rpc.ankr.com/base_sepolia",  # Ankr public
-            "https://base-sepolia.blockpi.network/v1/rpc/public",  # BlockPI public
-            "https://base-sepolia-rpc.publicnode.com",  # PublicNode
-        ],
-        "base": [
-            "https://mainnet.base.org",  # Official Base Mainnet
-            "https://base.blockpi.network/v1/rpc/public",  # BlockPI public
-            "https://base-rpc.publicnode.com",  # PublicNode
-            "https://1rpc.io/base",  # 1RPC public
-            "https://base.drpc.org",  # DRPC public
-        ],
-        "ethereum": [
-            "https://eth.llamarpc.com",  # LlamaRPC
-            "https://ethereum-rpc.publicnode.com",  # PublicNode
-            "https://rpc.ankr.com/eth",  # Ankr public
-            "https://ethereum.public.blockpi.network/v1/rpc/public",  # BlockPI
-        ],
-    }
+    # RPC URLs by network — REMOVED in the x402 v2 migration. The v0.2.1
+    # middleware connected to RPC providers directly for the on-chain
+    # `balanceOf` check; in v2 that responsibility moves to the facilitator
+    # (HTTPFacilitatorClient → /verify), so the resource server never makes
+    # an RPC call. Configuring RPC URLs here is now a no-op. If you need to
+    # change which facilitator answers /verify, set
+    # `app_settings.x402.facilitator_url` instead.
 
 
 class AgentSettings(BaseSettings):

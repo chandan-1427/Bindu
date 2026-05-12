@@ -478,14 +478,43 @@ class BinduApplication(Starlette):
         if not x402_ext:
             return None
 
-        from x402.common import process_price_to_atomic_amount
-        from x402.types import PaymentRequirements, SupportedNetworks
-        from typing import cast
+        from x402 import PaymentRequirements
+        from x402.mechanisms.evm.exact import ExactEvmServerScheme
+
+        # `resource_suffix` is preserved as a no-op parameter for callers — in
+        # x402 v2 the resource URL no longer lives on each PaymentRequirements
+        # entry; it moves to the `resource` field on the PaymentRequired wrapper
+        # built per response (see endpoints/payment_sessions.py). We accept and
+        # ignore the argument to keep the call site stable.
+        del resource_suffix  # not used in v2 requirements shape
+
+        # Bindu's user-facing config (and the v1 SDK) uses friendly network
+        # names like "base-sepolia". x402 v2 internally keys everything off
+        # CAIP-2 strings ("eip155:84532") — parse_price raises ValueError on
+        # anything else. We translate at this boundary so the user config
+        # stays friendly. Adding a new chain means adding a line here and a
+        # matching entry in x402's `mechanisms/evm/constants.py`.
+        friendly_to_caip2 = {
+            "base-sepolia": "eip155:84532",
+            "base": "eip155:8453",
+            "base-mainnet": "eip155:8453",
+            "ethereum": "eip155:1",
+            "ethereum-mainnet": "eip155:1",
+            "ethereum-sepolia": "eip155:11155111",
+        }
+
+        def _normalize_network(name: str) -> str:
+            return friendly_to_caip2.get(name, name)
 
         # When multiple payment options are configured on the extension, create a
-        # PaymentRequirements entry for each one. Otherwise, fall back to the single
-        # amount/network configuration for backward compatibility.
+        # PaymentRequirements entry for each one. Otherwise, fall back to the
+        # single amount/network configuration for backward compatibility.
         payment_requirements: list[PaymentRequirements] = []
+
+        # Shared parser — converts user-friendly Money ("$0.10", 0.10) into
+        # atomic-unit AssetAmount with the right asset address + EIP-712 domain.
+        # Replaces v1's free function `process_price_to_atomic_amount`.
+        scheme = ExactEvmServerScheme()
 
         options: list[dict[str, Any]]
         if getattr(x402_ext, "payment_options", None):
@@ -501,35 +530,22 @@ class BinduApplication(Starlette):
 
         for opt in options:
             amount = opt.get("amount")
-            network = opt.get("network") or app_settings.x402.default_network
+            raw_network = opt.get("network") or app_settings.x402.default_network
+            network = _normalize_network(raw_network)
             pay_to_address = opt.get("pay_to_address") or x402_ext.pay_to_address
 
-            # Type narrowing: amount should be present in payment options
             assert amount is not None, "Payment amount is required"
-            max_amount_required, asset_address, eip712_domain = (
-                process_price_to_atomic_amount(amount, network)
-            )
+            asset_amount = scheme.parse_price(amount, network)
 
             payment_requirements.append(
                 PaymentRequirements(
                     scheme="exact",
-                    network=cast(SupportedNetworks, network),
-                    asset=asset_address,
-                    max_amount_required=max_amount_required,
-                    resource=f"{manifest.url}{resource_suffix}",
-                    description=f"Payment required to use {manifest.name}",
-                    mime_type="",
+                    network=network,
+                    asset=asset_amount.asset,
+                    amount=asset_amount.amount,
                     pay_to=pay_to_address,
                     max_timeout_seconds=60,
-                    output_schema={
-                        "input": {
-                            "type": "http",
-                            "method": "POST",
-                            "discoverable": True,
-                        },
-                        "output": {},
-                    },
-                    extra=eip712_domain,
+                    extra=asset_amount.extra or {},
                 )
             )
 
@@ -578,20 +594,44 @@ class BinduApplication(Starlette):
 
         # Add X402 middleware if configured
         if x402_ext and payment_requirements:
+            from x402.http import FacilitatorConfig, HTTPFacilitatorClient
+            from x402.mechanisms.evm.exact import register_exact_evm_server
+            from x402.server import x402ResourceServer
+
             from .middleware import X402Middleware
+            from .middleware.x402.nonce_store import make_nonce_store
 
             logger.info(
                 f"X402 payment middleware enabled: "
                 f"{x402_ext.amount} {x402_ext.token} on {x402_ext.network})"
             )
 
-            facilitator_config = {"url": app_settings.x402.facilitator_url}
+            # Build the v2 ResourceServer once at app construction. The server
+            # owns the facilitator client and the registered scheme(s); the
+            # middleware just calls `verify_payment(...)` on it per request.
+            facilitator_client = HTTPFacilitatorClient(
+                FacilitatorConfig(url=app_settings.x402.facilitator_url)
+            )
+            resource_server = x402ResourceServer(facilitator_client)
+            # Register exact-EVM for every network we publish requirements
+            # for. The SDK helper attaches a fresh `ExactEvmServerScheme`
+            # to each network — keeps the scheme map honest about what's
+            # actually supported (vs a wildcard `eip155:*`).
+            networks = sorted({req.network for req in payment_requirements})
+            register_exact_evm_server(resource_server, networks)
+            resource_server.initialize()
+
+            # Nonce store backs replay-prevention. Redis when configured;
+            # in-memory fallback for single-process / test deployments.
+            nonce_store = make_nonce_store(app_settings.scheduler.redis_url)
+
             x402_middleware = Middleware(
                 X402Middleware,  # type: ignore[arg-type]
                 manifest=manifest,
-                facilitator_config=facilitator_config,
+                resource_server=resource_server,
                 x402_ext=x402_ext,
                 payment_requirements=payment_requirements,
+                nonce_store=nonce_store,
             )
             middleware_list.append(x402_middleware)
 
@@ -651,19 +691,24 @@ class BinduApplication(Starlette):
         from bindu.server.middleware.x402.payment_session_manager import (
             PaymentSessionManager,
         )
-        from x402.types import PaywallConfig
-        import os
+
+        # v2 ships two PaywallConfig shapes: the lean schemas TypedDict and
+        # the http.types dataclass that PaywallProvider.generate_html
+        # consumes. We need the dataclass — using the TypedDict here works
+        # at runtime via duck-typing but fails the type check.
+        from x402.http import PaywallConfig
 
         self._payment_session_manager = PaymentSessionManager()
 
-        # Create payment requirements for endpoints (with /payment-capture resource)
-        self._payment_requirements = [
-            req.model_copy(update={"resource": f"{manifest.url}/payment-capture"})
-            for req in payment_requirements_for_middleware
-        ]
+        # In x402 v2 the resource URL no longer lives on PaymentRequirements
+        # (it's set per-response on the PaymentRequired wrapper), so the
+        # middleware and the endpoint share the same requirements list.
+        self._payment_requirements = list(payment_requirements_for_middleware)
 
+        # The v1 `cdp_client_key` field is gone — Coinbase has rotated their
+        # paywall away from that pattern. v2 PaywallConfig keeps app branding
+        # plus testnet / current_url for the SDK's runtime template.
         self._paywall_config = PaywallConfig(
-            cdp_client_key=os.getenv("CDP_CLIENT_KEY") or "",
             app_name=f"{manifest.name} - x402 Payment",
             app_logo="/assets/light.svg",
         )

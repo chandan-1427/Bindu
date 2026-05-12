@@ -740,7 +740,7 @@ class TestManifestWorker:
         payment_context = {"session_id": "sess123", "amount": "100", "token": "USDC"}
 
         with patch(
-            "bindu.server.workers.manifest_worker.FacilitatorClient"
+            "bindu.server.workers.manifest_worker.HTTPFacilitatorClient"
         ) as mock_client_class:
             mock_client = AsyncMock()
             mock_client.settle_payment = AsyncMock(return_value={"status": "success"})

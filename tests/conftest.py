@@ -1,7 +1,7 @@
 """Pytest configuration and fixtures for Bindu tests.
 
 This file contains:
-1. External dependency stubs (OpenTelemetry, x402) to avoid heavy test dependencies
+1. External dependency stubs (OpenTelemetry) to avoid heavy test dependencies
 2. Core pytest configuration (asyncio event loop)
 3. Imports of organized fixtures from tests/fixtures/
 
@@ -10,14 +10,13 @@ Most fixtures are now organized in tests/fixtures/ modules for better maintainab
 
 # ============================================================================
 # EXTERNAL DEPENDENCY STUBS
-# These stubs allow tests to run without installing heavy optional dependencies
+# These stubs allow tests to run without installing heavy optional dependencies.
+# x402 v2 is a required runtime dep now, so it's no longer stubbed.
 # ============================================================================
 
-# --- OpenTelemetry Stubs ---
-from tests.conftest_stubs import setup_opentelemetry_stubs, setup_x402_stubs
+from tests.conftest_stubs import setup_opentelemetry_stubs
 
 setup_opentelemetry_stubs()
-setup_x402_stubs()
 
 # ============================================================================
 # PYTEST CONFIGURATION

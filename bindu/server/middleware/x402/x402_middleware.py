@@ -7,176 +7,88 @@
 #
 #  Thank you users! We ❤️ you! - 🌻
 
-"""X402 Payment Middleware for Bindu.
+"""X402 Payment Middleware for Bindu (x402 SDK v2).
 
-This middleware implements the x402 payment protocol for HTTP requests,
-following the official Coinbase x402 specification.
+Pipeline on a protected request:
 
-Based on: https://github.com/coinbase/x402/blob/main/python/x402/src/x402/fastapi/middleware.py
+1. Parse the JSON-RPC body. Malformed body → 402. (Previously bare
+   ``except Exception`` let the request through; CVE-shape "fails-open
+   on body parse".)
+2. Method check — only methods listed in ``app_settings.x402.protected_methods``
+   demand payment.
+3. ``X-PAYMENT`` header decoded and parsed via the SDK's
+   ``parse_payment_payload`` (handles both v1 and v2 payloads).
+4. Match the payload to one of the agent's payment requirements.
+5. **Replay-prevention**: claim ``(network, asset, nonce)`` in the nonce
+   store before paying for verification. Replays are rejected here, not
+   after the facilitator round-trip.
+6. **Verification**: ``x402ResourceServer.verify_payment`` delegates the
+   EIP-3009 signature recovery and on-chain balance check to the
+   configured facilitator. We trust ``result.is_valid``; on False we
+   reject without falling through.
+
+Compared with the v0.2.1 middleware this rewrite removes the manual
+Web3 connection pool, the manual ``balanceOf`` call, the
+silent fall-through when no contract code is found at the asset
+address, and the unused signature-verification branch — all of those
+responsibilities now live in the facilitator and are exercised by the
+SDK's verify path.
 """
 
 from __future__ import annotations
 
 import json
-from web3 import Web3
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
-from x402.common import x402_VERSION, find_matching_payment_requirements
-from x402.encoding import safe_base64_decode
-from x402.facilitator import FacilitatorClient, FacilitatorConfig
-from x402.types import (
-    PaymentPayload,
-    PaymentRequirements,
-    x402PaymentRequiredResponse,
-)
 
-from bindu.utils.logging import get_logger
-from bindu.extensions.x402 import X402AgentExtension
-from bindu.settings import app_settings
+from x402 import X402_VERSION, PaymentPayload, PaymentRequired, PaymentRequirements
+from x402.http.utils import safe_base64_decode
+from x402.schemas.helpers import parse_payment_payload
+from x402.server import x402ResourceServer
 
 from bindu.common.models import AgentManifest, VerifyResponse
+from bindu.extensions.x402 import X402AgentExtension
+from bindu.settings import app_settings
+from bindu.utils.logging import get_logger
+
+from .nonce_store import NonceStore
 
 logger = get_logger("bindu.server.middleware.x402")
 
-# Constants
 PROTECTED_PATH = "/"  # A2A protocol endpoint
 PROTECTED_METHOD = "POST"
-WEB3_RPC_TIMEOUT_SECONDS = 10
-SUPPORTED_X402_VERSION = 1
-SUPPORTED_PAYMENT_SCHEME = "exact"
 
-# ERC-20 balanceOf ABI
-ERC20_BALANCE_OF_ABI = [
-    {
-        "constant": True,
-        "inputs": [{"name": "_owner", "type": "address"}],
-        "name": "balanceOf",
-        "outputs": [{"name": "balance", "type": "uint256"}],
-        "type": "function",
-    }
-]
+# Buffer added on top of `max_timeout_seconds` when we set the nonce TTL.
+# Keeps the dedupe key alive a bit past the EIP-3009 validBefore window so
+# that clock skew or a slow settlement doesn't free the slot prematurely.
+NONCE_TTL_BUFFER_SECONDS = 60
 
 
 class X402Middleware(BaseHTTPMiddleware):
-    """Middleware that enforces x402 payment protocol for agent execution.
-
-    This middleware:
-    1. Checks if the agent requires payment (has execution_cost configured)
-    2. Intercepts requests to the A2A endpoint (/)
-    3. Returns 402 Payment Required if no X-PAYMENT header is present
-    4. Verifies and settles payments if X-PAYMENT header is provided
-    5. Allows request to proceed only after successful payment
-
-    Attributes:
-        manifest: Agent manifest containing payment configuration
-        protected_path: Path that requires payment (default: "/" for A2A endpoint)
-    """
+    """Enforce x402 payment for the A2A endpoint."""
 
     def __init__(
         self,
         app,
         manifest: AgentManifest,
-        facilitator_config: FacilitatorConfig,
+        resource_server: x402ResourceServer,
         x402_ext: X402AgentExtension | None,
         payment_requirements: list[PaymentRequirements],
+        nonce_store: NonceStore,
     ):
-        """Initialize X402 middleware.
-
-        Args:
-            app: ASGI application
-            manifest: Agent manifest with x402 configuration
-            facilitator_config: Facilitator configuration
-            x402_ext: X402AgentExtension instance
-            payment_requirements: Pre-configured payment requirements from application
-        """
+        """Wire the middleware to its ResourceServer, requirements list, and nonce store."""
         super().__init__(app)
         self.manifest = manifest
         self.x402_ext = x402_ext
-        self.facilitator = FacilitatorClient(config=facilitator_config)
+        self._resource_server = resource_server
         self._payment_requirements = payment_requirements
-
+        self._nonce_store = nonce_store
         self.protected_path = PROTECTED_PATH
 
-        # Web3 connection pool for performance optimization
-        self._web3_connections: dict[str, Web3] = {}
-
-    def _get_web3_connection(self, network: str) -> tuple[Web3 | None, str | None]:
-        """Get or create cached Web3 connection for network.
-
-        This method maintains a connection pool to avoid creating new Web3
-        instances for every payment validation request.
-
-        Args:
-            network: Network name (e.g., "base-sepolia", "base", "ethereum")
-
-        Returns:
-            Tuple of (Web3 instance or None, error message or None)
-        """
-        # Check if we have a cached connection
-        if network in self._web3_connections:
-            try:
-                # Verify connection is still alive
-                self._web3_connections[network].eth.chain_id
-                logger.debug(f"Using cached Web3 connection for {network}")
-                return self._web3_connections[network], None
-            except Exception as e:
-                logger.warning(
-                    f"Cached connection for {network} failed: {e}. Reconnecting..."
-                )
-                del self._web3_connections[network]
-
-        # Get RPC URLs for this network
-        rpc_urls = app_settings.x402.rpc_urls_by_network.get(network)
-        if not rpc_urls:
-            error_msg = f"No RPC URLs configured for network: {network}"
-            logger.warning(error_msg)
-            return None, error_msg
-
-        # Try each RPC URL until one succeeds
-        last_error = None
-        for rpc_url in rpc_urls:
-            try:
-                logger.debug(f"Creating new Web3 connection to {rpc_url}")
-                w3 = Web3(
-                    Web3.HTTPProvider(
-                        rpc_url, request_kwargs={"timeout": WEB3_RPC_TIMEOUT_SECONDS}
-                    )
-                )
-
-                # Test connection
-                chain_id = w3.eth.chain_id
-                logger.info(
-                    f"Successfully connected to {network} (chain_id={chain_id}) via {rpc_url}"
-                )
-
-                # Cache the connection
-                self._web3_connections[network] = w3
-                return w3, None
-
-            except Exception as e:
-                last_error = str(e)
-                logger.warning(f"Failed to connect to {rpc_url}: {e}")
-                continue
-
-        # All connections failed
-        error_msg = (
-            f"Failed to connect to any {network} RPC provider. Last error: {last_error}"
-        )
-        logger.error(error_msg)
-        return None, error_msg
-
     async def dispatch(self, request: Request, call_next) -> Response:
-        """Process request and enforce payment if required.
-
-        Args:
-            request: Incoming HTTP request
-            call_next: Next middleware/handler in chain
-
-        Returns:
-            Response with payment enforcement or agent execution result
-        """
+        """Enforce x402 payment on protected methods; pass everything else through."""
         if (
             not self.x402_ext
             or request.url.path != self.protected_path
@@ -184,241 +96,162 @@ class X402Middleware(BaseHTTPMiddleware):
         ):
             return await call_next(request)
 
-        # Check if the JSON-RPC method requires payment
-        # Only methods in app_settings.x402.protected_methods require payment
+        # 1. Parse body. We narrow the exception class — a bare
+        # `except Exception` here lets non-payment errors silently bypass
+        # the payment check. JSON-decode failure must be a 402, not an
+        # implicit allow.
+        body = await request.body()
         try:
-            body = await request.body()
             request_data = json.loads(body.decode("utf-8"))
-            method = request_data.get("method", "")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.info("x402: rejecting request with unparseable body: %s", e)
+            return self._create_402_response("Malformed JSON-RPC body")
 
-            # Recreate request with consumed body
-            from starlette.requests import Request as StarletteRequest
+        method = request_data.get("method", "")
 
-            async def receive():
-                return {"type": "http.request", "body": body}
+        # Replace request with one that has a re-readable body.
+        async def receive():
+            return {"type": "http.request", "body": body}
 
-            request = StarletteRequest(request.scope, receive)
+        request = Request(request.scope, receive)
 
-            # Check if method requires payment (configured in settings)
-            if method not in app_settings.x402.protected_methods:
-                logger.debug(
-                    f"Method '{method}' does not require payment, allowing request"
-                )
-                return await call_next(request)
-
-            logger.debug(
-                f"Method '{method}' requires payment, checking X-PAYMENT header"
-            )
-
-        except Exception as e:
-            logger.warning(f"Error parsing request body: {e}")
+        if method not in app_settings.x402.protected_methods:
+            logger.debug("x402: method %r does not require payment", method)
             return await call_next(request)
 
-        # Check for X-PAYMENT header
+        # 2. X-PAYMENT header presence.
         payment_header = request.headers.get("X-PAYMENT", "")
-
         if not payment_header:
-            # No payment provided - return 402 Payment Required
-            logger.info(
-                f"Payment required for {request.url.path} from {request.client.host if request.client else 'unknown'}"
-            )
             return self._create_402_response("X-PAYMENT header required")
 
-        # Decode and parse payment payload
+        # 3. Decode and parse payload. The X-PAYMENT header is base64-encoded
+        # JSON by convention; the SDK's `parse_payment_payload` itself takes
+        # JSON bytes, so we decode first. Both steps' exceptions are caught
+        # and surfaced as a 402.
         try:
-            payment_dict = json.loads(safe_base64_decode(payment_header))
-            payment_payload = PaymentPayload.model_validate(payment_dict)
-        except Exception as e:
-            logger.warning(
-                f"Invalid X-PAYMENT header from {request.client.host if request.client else 'unknown'}: {e}"
-            )
+            decoded = safe_base64_decode(payment_header)
+            payload = parse_payment_payload(decoded.encode("utf-8"))
+        except (ValueError, TypeError) as e:
+            logger.warning("x402: invalid X-PAYMENT payload: %s", e)
+            return self._create_402_response(f"Invalid X-PAYMENT header: {e}")
+
+        if not isinstance(payload, PaymentPayload):
+            # We only support v2 payloads on the verify side. A v1 payload
+            # could be auto-upgraded in future via the SDK's compat shim,
+            # but the v1 verification path is unsigned and stays disabled.
             return self._create_402_response(
-                f"Invalid X-PAYMENT header format: {str(e)}"
+                "x402 v1 payment payloads are no longer accepted; please re-sign with v2"
             )
 
-        selected_payment_requirements = find_matching_payment_requirements(
-            self._payment_requirements, payment_payload
+        # 4. Match to one of the requirements we publish.
+        requirement = self._resource_server.find_matching_requirements(
+            self._payment_requirements, payload
         )
-
-        if not selected_payment_requirements:
+        if requirement is None:
             return self._create_402_response("No matching payment requirements found")
 
-        try:
-            is_valid, error_reason = await self._validate_payment_manually(
-                payment_payload, selected_payment_requirements
-            )
-            logger.info(
-                f"Manual payment validation: is_valid={is_valid}, error_reason={error_reason}"
-            )
-        except Exception as e:
-            logger.error(f"Payment verification error: {e}", exc_info=True)
-            return self._create_402_response(f"Payment verification error: {str(e)}")
+        # 5. Replay prevention — claim before verifying.
+        # Doing the claim first means a replayed payload doesn't burn a
+        # facilitator round-trip; doing it before settlement means we don't
+        # rely on the on-chain contract to reject our replays.
+        nonce = self._extract_nonce(payload)
+        if not nonce:
+            return self._create_402_response("Payment payload missing nonce")
 
-        if not is_valid:
-            logger.warning(
-                f"Payment verification failed from {request.client.host if request.client else 'unknown'}: {error_reason}"
+        ttl = requirement.max_timeout_seconds + NONCE_TTL_BUFFER_SECONDS
+        try:
+            claimed = await self._nonce_store.claim(
+                payload.get_network(), requirement.asset, nonce, ttl
             )
-            logger.warning(f"Payment payload: {payment_payload}")
-            logger.warning(f"Payment requirements: {selected_payment_requirements}")
-            return self._create_402_response(f"Invalid payment: {error_reason}")
+        except Exception:
+            # The nonce store should fail loudly: a silent failure here would
+            # collapse straight back into the replay vulnerability we're trying
+            # to fix. Reject the request and let the operator investigate.
+            logger.exception("x402: nonce store error; rejecting payment")
+            return self._create_402_response(
+                "Payment validation temporarily unavailable"
+            )
+
+        if not claimed:
+            logger.warning(
+                "x402: replay detected — nonce already used (network=%s, asset=%s, nonce=%s)",
+                payload.get_network(),
+                requirement.asset,
+                nonce,
+            )
+            return self._create_402_response("Payment nonce already used (replay)")
+
+        # 6. Verify via the configured facilitator. In v2 this performs the
+        # EIP-3009 signature recovery, network/scheme match, amount check,
+        # and on-chain balance check. We trust the structured response and
+        # do NOT fall through on errors.
+        try:
+            result = await self._resource_server.verify_payment(payload, requirement)
+        except Exception:
+            logger.exception("x402: facilitator verify_payment raised")
+            return self._create_402_response("Payment verification failed")
+
+        if not result.is_valid:
+            logger.warning(
+                "x402: payment rejected by facilitator: %s (payer=%s)",
+                result.invalid_reason,
+                result.payer,
+            )
+            return self._create_402_response(
+                f"Invalid payment: {result.invalid_reason or 'unknown reason'}"
+            )
 
         logger.info(
-            f"Payment verified for {request.url.path} from {request.client.host if request.client else 'unknown'}"
+            "x402: payment verified (payer=%s, network=%s, asset=%s)",
+            result.payer,
+            payload.get_network(),
+            requirement.asset,
         )
 
-        # Attach payment details to request for later use by the worker
-        request.state.payment_payload = payment_payload
-        request.state.payment_requirements = selected_payment_requirements
+        # Attach for the worker — settlement happens at task completion.
+        request.state.payment_payload = payload
+        request.state.payment_requirements = requirement
         request.state.verify_response = VerifyResponse(
             is_valid=True, invalid_reason=None
         )
+        request.state.payer = result.payer
 
-        # Process the request (execute agent)
-        # Payment settlement will be handled by ManifestWorker when task completes
-        response = await call_next(request)
+        return await call_next(request)
 
-        return response
+    @staticmethod
+    def _extract_nonce(payload: PaymentPayload) -> str | None:
+        """Pull the replay-prevention key out of the payload.
 
-    async def _validate_payment_manually(
-        self, payment_payload: PaymentPayload, payment_requirements: PaymentRequirements
-    ) -> tuple[bool, str | None]:
-        """Manually validate payment without consuming nonce.
-
-        This validates:
-        1. Payment structure (already validated by Pydantic)
-        2. Amount matches requirements
-        3. Network matches requirements
-        4. Payer has sufficient balance (on-chain check)
-        5. EIP-3009 signature is valid (optional)
-
-        Args:
-            payment_payload: Payment payload from client
-            payment_requirements: Payment requirements for this agent
-
-        Returns:
-            Tuple of (is_valid, error_reason)
+        For EIP-3009 (the only currently-supported scheme) the nonce lives
+        at ``payload.payload["authorization"]["nonce"]``. For Permit2 it
+        would be at the top level. We tolerate both shapes.
         """
-        try:
-            # 1. Check scheme is 'exact'
-            if (
-                payment_payload.x402_version != SUPPORTED_X402_VERSION
-                or payment_payload.scheme != SUPPORTED_PAYMENT_SCHEME
-            ):
-                return False, f"Unsupported payment scheme: {payment_payload.scheme}"
-
-            # 2. Extract authorization details
-            if not hasattr(payment_payload.payload, "authorization"):
-                return False, "Missing authorization in payment payload"
-
-            auth = payment_payload.payload.authorization
-
-            # 3. Validate amount matches requirements
-            payment_value = int(auth.value)
-            required_value = int(payment_requirements.max_amount_required)
-
-            if payment_value < required_value:
-                return (
-                    False,
-                    f"Insufficient payment amount: {payment_value} < {required_value}",
-                )
-
-            # 4. Validate network matches
-            if payment_payload.network != payment_requirements.network:
-                return (
-                    False,
-                    f"Network mismatch: {payment_payload.network} != {payment_requirements.network}",
-                )
-
-            # 5. Get RPC URL for network
-            w3, connection_error = self._get_web3_connection(payment_payload.network)
-
-            if w3 is None:
-                return False, f"Cannot connect to {payment_payload.network} network"
-
-            # 6. Check balance on-chain (optional - skip if token contract unavailable)
-            try:
-                # Get token contract address
-                token_address = Web3.to_checksum_address(payment_requirements.asset)
-                logger.info(
-                    f"Checking token contract: {token_address} on {payment_payload.network}"
-                )
-
-                # Check if contract is deployed at this address
-                code = w3.eth.get_code(token_address)
-                if code == b"" or code == b"\x00" or code.hex() == "0x":
-                    logger.warning(
-                        f"No contract found at {token_address} on {payment_payload.network}. "
-                        f"This may be an incorrect token address. Skipping balance check."
-                    )
-                else:
-                    logger.info(
-                        f"Contract found at {token_address}, bytecode length: {len(code)} bytes"
-                    )
-
-                    token_contract = w3.eth.contract(
-                        address=token_address, abi=ERC20_BALANCE_OF_ABI
-                    )
-
-                    # Check payer balance
-                    payer_address = Web3.to_checksum_address(auth.from_)
-                    balance = token_contract.functions.balanceOf(payer_address).call()
-
-                    if balance < payment_value:
-                        return (
-                            False,
-                            f"Insufficient balance: {balance} < {payment_value} (required)",
-                        )
-
-                    logger.info(
-                        f"Payment validation passed: network={payment_payload.network}, "
-                        f"token={token_address}, amount={payment_value}, balance={balance}, payer={payer_address}"
-                    )
-
-            except Exception as balance_error:
-                # Balance check failed — reject payment rather than silently allowing
-                # an unverified charge. This prevents funds from being charged when the
-                # on-chain state cannot be confirmed (broken RPC, wrong token address, etc.)
-                logger.error(
-                    f"Balance check failed for {payment_requirements.asset}: {balance_error}. "
-                    f"Rejecting payment to prevent unverified charge."
-                )
-                return (
-                    False,
-                    f"Balance check failed: {balance_error}",
-                )
-
-            return True, None
-
-        except Exception as e:
-            logger.error(f"Payment validation error: {e}", exc_info=True)
-            return False, f"Validation error: {str(e)}"
+        scheme_payload = payload.payload or {}
+        auth = scheme_payload.get("authorization")
+        if isinstance(auth, dict) and "nonce" in auth:
+            return str(auth["nonce"])
+        if "nonce" in scheme_payload:
+            return str(scheme_payload["nonce"])
+        return None
 
     def _create_402_response(self, error: str) -> JSONResponse:
-        """Create a 402 Payment Required response using x402PaymentRequiredResponse.
-
-        Args:
-            error: Error message to include in response
-
-        Returns:
-            JSONResponse with 402 status and payment requirements
-        """
-        # Use the official x402PaymentRequiredResponse type
-        response_data = x402PaymentRequiredResponse(
-            x402_version=x402_VERSION,
+        """Build a 402 Payment Required response using the v2 SDK type."""
+        response_data = PaymentRequired(
+            x402_version=X402_VERSION,
             accepts=self._payment_requirements,
             error=error,
         ).model_dump(by_alias=True)
 
-        # Add agent discovery metadata (Bindu-specific extension)
-        response_data["agent"] = {
+        # Bindu-specific agent discovery metadata. Not part of the x402 spec,
+        # but useful to clients that want to discover the agent card.
+        agent_meta: dict[str, str] = {
             "name": self.manifest.name,
             "description": self.manifest.description or "",
             "agentCard": "/.well-known/agent.json",
         }
-
-        # Add DID if available (Bindu-specific extension)
         if self.manifest.did_extension and self.manifest.did_extension.did:
-            response_data["agent"]["did"] = self.manifest.did_extension.did
+            agent_meta["did"] = self.manifest.did_extension.did
+        response_data["agent"] = agent_meta
 
         return JSONResponse(
             content=response_data,
