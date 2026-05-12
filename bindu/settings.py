@@ -3,10 +3,87 @@
 This module defines the configuration settings for the application using pydantic models.
 """
 
-from pydantic import Field, computed_field, BaseModel, HttpUrl
+import re
+
+from pydantic import Field, computed_field, BaseModel, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import AliasChoices
 from typing import Literal
+
+
+class ExtraNetwork(BaseModel):
+    """Operator-supplied mapping for a non-default EVM network.
+
+    The x402 v2 SDK only knows about Base mainnet (``eip155:8453``) and
+    Base Sepolia (``eip155:84532``) out of the box. Reaching any other
+    EVM chain — SKALE, Polygon, Avalanche, Ethereum mainnet, etc. — needs
+    two things:
+
+    1. A facilitator that supports that chain (set ``facilitator_url`` on
+       :class:`X402Settings` to a facilitator advertising the chain in its
+       ``/supported`` response).
+    2. A way for the SDK's price parser to convert a human-readable amount
+       (``"$0.01"``) into the right ERC-20 contract on that chain.
+
+    This config carries #2 — the asset metadata the resource server
+    registers with x402 v2's ``ExactEvmServerScheme.add_money_parser`` so
+    pricing in the agent's ``execution_cost`` lands on the right asset.
+    The friendly key (the dict key in :attr:`X402Settings.extra_networks`)
+    is what operators write in their agent config; the ``caip2`` field is
+    what gets stamped on PaymentRequirements.
+
+    Example — adding SKALE Europa Hub:
+
+    .. code-block:: python
+
+        extra_networks={
+            "skale-europa": ExtraNetwork(
+                caip2="eip155:1187947933",
+                asset="0x85889c8c714505E0c94b30fcfcF64fE3Ac8FCb20",
+                asset_name="Bridged USDC (SKALE Bridge)",
+                asset_decimals=6,
+                asset_eip712_version="2",
+            )
+        }
+    """
+
+    caip2: str = Field(
+        ...,
+        description="CAIP-2 network identifier (e.g. 'eip155:1187947933').",
+    )
+    asset: str = Field(
+        ...,
+        description="ERC-20 contract address that the facilitator settles in.",
+    )
+    asset_symbol: str = Field(default="USDC", description="Token symbol.")
+    asset_name: str = Field(
+        default="USD Coin",
+        description="Token name. Goes into EIP-712 domain — must match the on-chain token's `name()`.",
+    )
+    asset_decimals: int = Field(
+        default=6,
+        ge=0,
+        le=36,
+        description="Token decimals — used to scale Money to atomic units.",
+    )
+    asset_eip712_version: str = Field(
+        default="2",
+        description="EIP-712 domain version — must match the on-chain token's domain separator.",
+    )
+
+    @field_validator("caip2")
+    @classmethod
+    def _validate_caip2(cls, value: str) -> str:
+        if not re.fullmatch(r"eip155:\d+", value):
+            raise ValueError("caip2 must match 'eip155:<chain_id>' (digits only)")
+        return value
+
+    @field_validator("asset")
+    @classmethod
+    def _validate_asset(cls, value: str) -> str:
+        if not re.fullmatch(r"0x[a-fA-F0-9]{40}", value):
+            raise ValueError("asset must be a 0x-prefixed 40-hex-character address")
+        return value
 
 
 class ProjectSettings(BaseSettings):
@@ -324,6 +401,24 @@ class X402Settings(BaseSettings):
     # an RPC call. Configuring RPC URLs here is now a no-op. If you need to
     # change which facilitator answers /verify, set
     # `app_settings.x402.facilitator_url` instead.
+
+    # Operator-extensible mapping for EVM networks the x402 SDK doesn't ship
+    # with built-in metadata. See :class:`ExtraNetwork` for the per-entry
+    # contract. The default ships one example — SKALE Europa Hub via
+    # facilitator.x402.fi — so that "SKALE just works" out of the box
+    # *iff* the operator also sets ``facilitator_url`` to a SKALE-aware
+    # facilitator. The Coinbase default (``x402.org/facilitator``) does
+    # NOT support SKALE today.
+    extra_networks: dict[str, ExtraNetwork] = {
+        "skale-europa": ExtraNetwork(
+            caip2="eip155:1187947933",
+            asset="0x85889c8c714505E0c94b30fcfcF64fE3Ac8FCb20",
+            asset_symbol="USDC",
+            asset_name="Bridged USDC (SKALE Bridge)",
+            asset_decimals=6,
+            asset_eip712_version="2",
+        ),
+    }
 
 
 class AgentSettings(BaseSettings):

@@ -480,6 +480,7 @@ class BinduApplication(Starlette):
 
         from x402 import PaymentRequirements
         from x402.mechanisms.evm.exact import ExactEvmServerScheme
+        from x402.schemas.base import AssetAmount
 
         # `resource_suffix` is preserved as a no-op parameter for callers — in
         # x402 v2 the resource URL no longer lives on each PaymentRequirements
@@ -488,19 +489,26 @@ class BinduApplication(Starlette):
         # ignore the argument to keep the call site stable.
         del resource_suffix  # not used in v2 requirements shape
 
-        # Bindu's user-facing config (and the v1 SDK) uses friendly network
-        # names like "base-sepolia". x402 v2 internally keys everything off
-        # CAIP-2 strings ("eip155:84532") — parse_price raises ValueError on
-        # anything else. We translate at this boundary so the user config
-        # stays friendly. Adding a new chain means adding a line here and a
-        # matching entry in x402's `mechanisms/evm/constants.py`.
-        friendly_to_caip2 = {
+        # Bindu's user-facing config uses friendly network names like
+        # "base-sepolia". x402 v2 internally keys everything off CAIP-2 strings
+        # ("eip155:84532") — parse_price raises ValueError on anything else.
+        # We translate at this boundary so the user config stays friendly.
+        builtin_friendly_to_caip2 = {
             "base-sepolia": "eip155:84532",
             "base": "eip155:8453",
             "base-mainnet": "eip155:8453",
             "ethereum": "eip155:1",
             "ethereum-mainnet": "eip155:1",
             "ethereum-sepolia": "eip155:11155111",
+        }
+        # Merge operator-supplied networks. The agent config keeps using the
+        # friendly key; the CAIP-2 it resolves to is whatever the operator
+        # declared. Built-ins win on collision, on purpose — operators
+        # shouldn't accidentally re-route base-sepolia to a custom chain.
+        extra_networks = app_settings.x402.extra_networks
+        friendly_to_caip2 = {
+            **{name: cfg.caip2 for name, cfg in extra_networks.items()},
+            **builtin_friendly_to_caip2,
         }
 
         def _normalize_network(name: str) -> str:
@@ -515,6 +523,39 @@ class BinduApplication(Starlette):
         # atomic-unit AssetAmount with the right asset address + EIP-712 domain.
         # Replaces v1's free function `process_price_to_atomic_amount`.
         scheme = ExactEvmServerScheme()
+
+        # Teach the scheme about every operator-configured EVM network. Without
+        # this the SDK's default money parser only knows Base mainnet/sepolia
+        # USDC and raises on anything else. The MoneyParser contract from
+        # x402.mechanisms.evm.exact.server: ``(float, str) -> AssetAmount | None``.
+        # Returning None falls through to the next parser, so each parser only
+        # claims requests for its specific CAIP-2.
+        caip2_to_extra = {cfg.caip2: cfg for cfg in extra_networks.values()}
+        for extra_caip2, extra_cfg in caip2_to_extra.items():
+
+            def _parser(
+                decimal_amount: float,
+                network_str: str,
+                _cfg: Any = extra_cfg,
+                _caip2: str = extra_caip2,
+            ) -> AssetAmount | None:
+                if network_str != _caip2:
+                    return None
+                # Scale the user-facing decimal price into atomic units of the
+                # configured ERC-20. Round to the nearest atomic unit — agents
+                # typically charge in cents, so sub-unit rounding loss is
+                # bounded by the asset's decimals (6 for USDC = $0.000001).
+                atomic = round(decimal_amount * (10**_cfg.asset_decimals))
+                return AssetAmount(
+                    amount=str(atomic),
+                    asset=_cfg.asset,
+                    extra={
+                        "name": _cfg.asset_name,
+                        "version": _cfg.asset_eip712_version,
+                    },
+                )
+
+            scheme.register_money_parser(_parser)
 
         options: list[dict[str, Any]]
         if getattr(x402_ext, "payment_options", None):

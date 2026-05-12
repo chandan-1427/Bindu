@@ -1,6 +1,17 @@
 # Known Issues
 
-_Last updated: 2026-05-12 — Four x402 payment-bypass entries removed
+_Last updated: 2026-05-12 — Added `skale-facilitator-cert-expired`
+(low/ops) under Bindu Core after adding operator-extensible network
+support to `X402Settings.extra_networks` and the `register_money_parser`
+plumbing in `applications.py`. SKALE-aware facilitator
+`facilitator.x402.fi` has an expired TLS cert and is the only public
+endpoint that advertises SKALE chains in its `/supported` response; the
+shipped default settings include `skale-europa` so the structure is
+visible, but operators need to bring their own working facilitator URL
+to actually settle. See
+[`tests/integration/x402/test_skale_facilitator_supported.py`](./tests/integration/x402/test_skale_facilitator_supported.py)
+for the opt-in smoke check.
+Earlier: 2026-05-12 — Four x402 payment-bypass entries removed
 (`x402-middleware-fails-open-on-body-parse`, `x402-no-replay-prevention`,
 `x402-no-signature-verification`,
 `x402-balance-check-skipped-on-missing-contract-code`). The middleware
@@ -51,7 +62,7 @@ Issue referencing the slug (e.g. "Fixes `context-window-hardcoded`").
 | Subsystem | High | Medium | Low | Nit |
 |---|---:|---:|---:|---:|
 | [Gateway](#gateway) | 2 | 14 | 19 | 9 |
-| [Bindu Core (Python)](#bindu-core-python) | 0 | 6 | 2 | 0 |
+| [Bindu Core (Python)](#bindu-core-python) | 0 | 6 | 3 | 0 |
 | [SDKs (TypeScript)](#sdks-typescript) | — | — | — | — |
 | [Frontend](#frontend) | — | — | — | — |
 
@@ -933,6 +944,7 @@ explains it.
 | [`no-rate-limit-or-quota-per-caller`](#no-rate-limit-or-quota-per-caller) | medium | No per-caller quota; single caller can exhaust resources |
 | [`context-id-silent-fallback`](#context-id-silent-fallback) | medium | Malformed `context_id` silently creates a new context |
 | [`artifact-name-not-sanitized`](#artifact-name-not-sanitized) | low (sec) | Agent-supplied artifact names not basenamed |
+| [`skale-facilitator-cert-expired`](#skale-facilitator-cert-expired) | low (ops) | Only SKALE-aware x402 facilitator has an expired TLS cert |
 
 ### Medium
 
@@ -1102,6 +1114,30 @@ visible.
 should apply `os.path.basename` and an allow-list regex before
 writing. Fix in-core is to sanitize in `from_result`:
 `artifact_name = os.path.basename(artifact_name) or "result"`.
+**Tracking:** _(no issue yet)_
+
+### skale-facilitator-cert-expired
+
+**Severity:** low (operations, not a code bug)
+**Summary:** The only x402 facilitator that currently advertises SKALE
+chains in its `/supported` response is `https://facilitator.x402.fi`,
+and its TLS certificate is expired. Coinbase's own facilitator at
+`https://x402.org/facilitator` does not include SKALE in its
+`/supported` response. Operators who want SKALE today have to point
+`X402__FACILITATOR_URL` at `facilitator.x402.fi` and either accept
+the cert error or terminate TLS at a proxy with a fresh chain.
+Bindu's `ExtraNetwork` config and the registered money parser for
+`skale-europa` are in place — the only missing piece is a stable,
+properly-served facilitator endpoint. Tracked via the live network
+smoke at
+[`tests/integration/x402/test_skale_facilitator_supported.py`](../tests/integration/x402/test_skale_facilitator_supported.py),
+which is opt-in (`X402_NETWORK_TESTS=1`) and will fail loudly if the
+facilitator stops advertising SKALE or changes the bridged-USDC
+metadata.
+**Workaround:** For production, run your own facilitator instance
+keyed to the SKALE chains you need (`x402-facilitator` is open source).
+For local dev / testing, set `X402_NETWORK_TESTS=1` and use the
+expired-cert endpoint after reviewing the smoke test for context.
 **Tracking:** _(no issue yet)_
 
 ---
