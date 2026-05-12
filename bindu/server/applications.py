@@ -146,6 +146,7 @@ class BinduApplication(Starlette):
         self._storage: Storage | None = None
         self._scheduler: Scheduler | None = None
         self._agent_card_json_schema: bytes | None = None
+        self._private_agent_card_json_schema: bytes | None = None
         self._x402_ext = x402_ext
         self._payment_session_manager = None
         self._payment_requirements = None
@@ -187,6 +188,27 @@ class BinduApplication(Starlette):
             ["HEAD", "GET", "OPTIONS"],
             with_app=True,
         )
+
+        # Private agent card — same shape, includes `private_skills`, gated
+        # by Hydra middleware + the manifest's `allowed_dids` allowlist.
+        # Only register when the manifest actually declares a private surface
+        # so the route doesn't exist on agents that don't use the feature.
+        # Path is deliberately NOT under `/.well-known/*` because the auth
+        # middleware treats that glob as public.
+        # `getattr` with `or []` keeps this resilient to manifest stubs
+        # (tests use Mock(spec=...) snapshots that may pre-date the field).
+        if self.manifest and (
+            getattr(self.manifest, "private_skills", None)
+            or getattr(self.manifest, "allowed_dids", None)
+        ):
+            from .endpoints import private_agent_card_endpoint
+
+            self._add_route(
+                "/agent/private.json",
+                private_agent_card_endpoint,
+                ["HEAD", "GET", "OPTIONS"],
+                with_app=True,
+            )
 
         # Root endpoint - redirect GET to agent card, POST for A2A protocol
         from starlette.responses import RedirectResponse

@@ -36,6 +36,11 @@ class ConfigValidator:
         "version": __version__,
         "recreate_keys": False,
         "skills": [],
+        # Private skills surface — visible only to callers whose DID is on
+        # `allowed_dids`, served from /agent/private.json behind Hydra auth.
+        # Empty by default so existing agents keep their current behavior.
+        "private_skills": [],
+        "allowed_dids": [],
         "capabilities": {},
         "storage": {"type": "memory"},
         "scheduler": {"type": "memory"},

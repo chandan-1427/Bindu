@@ -229,6 +229,8 @@ def create_manifest(
     extra_metadata: dict[str, Any] | None = None,
     global_webhook_url: str | None = None,
     global_webhook_token: str | None = None,
+    private_skills: list[Skill] | None = None,
+    allowed_dids: list[str] | None = None,
 ) -> AgentManifest:
     """Create a protocol-compliant AgentManifest from any Python function.
 
@@ -300,6 +302,8 @@ def create_manifest(
     )
     _capabilities = capabilities if capabilities is not None else AgentCapabilities()
     _skills = skills if skills is not None else []
+    _private_skills = private_skills if private_skills is not None else []
+    _allowed_dids = allowed_dids if allowed_dids is not None else []
 
     # Create base manifest
     manifest = AgentManifest(
@@ -313,6 +317,8 @@ def create_manifest(
         agent_trust=_agent_trust,
         capabilities=_capabilities,
         skills=_skills,
+        private_skills=_private_skills,
+        allowed_dids=_allowed_dids,
         kind=kind,
         num_history_sessions=num_history_sessions,
         enable_system_message=enable_system_message,

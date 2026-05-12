@@ -158,6 +158,7 @@ Every row here links out to the guide that actually goes into it.
 | **x402 payments** | Flip a flag and the agent demands USDC before your handler ever sees the request. **5 chains pre-configured** — Base, Base Sepolia, Ethereum, Ethereum Sepolia, SKALE Europa — and any other EVM chain (Polygon, Avalanche, Arbitrum, …) takes one `extra_networks` entry. | [PAYMENT.md](docs/PAYMENT.md) |
 | **Push notifications** | The agent webhooks you when a task changes state. Stop polling. | [NOTIFICATIONS.md](docs/NOTIFICATIONS.md) |
 | **Skills system** | Declare what your agent can do; callers see it on the agent card before they spend a token asking. | [SKILLS.md](docs/SKILLS.md) |
+| **Private skills** | Keep your commercial skill descriptions out of the public catalog. Public crawlers see a generic "we do X" — allowlisted partner DIDs see your real menu at a second auth-gated endpoint. Useful when your skill descriptions ARE your product roadmap. | [PRIVATE_SKILLS.md](docs/PRIVATE_SKILLS.md) |
 | **Agent negotiation** | Two agents agree on price, latency, and SLA up front. No surprise bills. | [NEGOTIATION.md](docs/NEGOTIATION.md) |
 | **Storage** | Postgres for tasks and messages. Swap the backend if you've got a preference. | [STORAGE.md](docs/STORAGE.md) |
 | **Scheduler** | Redis-backed retries, timeouts, and recurring tasks. | [SCHEDULER.md](docs/SCHEDULER.md) |
@@ -226,6 +227,7 @@ If your model provider speaks the OpenAI or Anthropic API, it works — [OpenRou
 - [Calling a secured agent](docs/AUTHENTICATION.md) — the auth flow with DID signing and Hydra tokens, with a working Python client
 - [Cloud deployment](docs/runtime/quickstart.md) — `bindu deploy` walkthrough
 - [Gateway](docs/GATEWAY.md) — multi-agent orchestration
+- [Private skills](docs/PRIVATE_SKILLS.md) — hide your commercial menu from the public catalog; show it only to allowlisted partner DIDs
 - [gRPC architecture](docs/grpc/) — for anyone building a new language SDK
 - [Known issues](bugs/known-issues.md) — read this before you push to production
 - [Troubleshooting](docs/AUTHENTICATION.md#troubleshooting) — the errors you'll hit, and how to get past them

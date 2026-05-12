@@ -1,0 +1,17 @@
+id: public-greet
+name: greet
+version: 1.0.0
+author: acme.compliance@example.com
+description: |
+  Public-facing greeting skill. Available to anyone who hits the agent.
+  Used to confirm the agent is alive and reachable.
+tags:
+  - public
+  - introduction
+input_modes:
+  - application/json
+output_modes:
+  - text/plain
+examples:
+  - "hi"
+  - "are you there?"

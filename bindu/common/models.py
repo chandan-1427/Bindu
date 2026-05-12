@@ -185,6 +185,14 @@ class AgentManifest:
     enable_context_based_history: bool = False
     extra_data: dict[str, Any] = field(default_factory=dict)
 
+    # Private skills — visible only to callers whose DID is in `allowed_dids`.
+    # The public agent card endpoint (`/.well-known/agent.json`) shows only
+    # `skills`; the auth-gated private endpoint shows `skills + private_skills`.
+    # When both are empty, the private endpoint is not registered so the
+    # surface stays exactly as it was before this feature landed.
+    private_skills: list[Skill] = field(default_factory=list)
+    allowed_dids: list[str] = field(default_factory=list)
+
     # Global Webhook Configuration (for long-running tasks)
     global_webhook_url: str | None = None
     """Default webhook URL for all tasks when no task-specific webhook is registered.

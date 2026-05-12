@@ -471,6 +471,20 @@ def _bindufy_core(
             caller_dir or Path.cwd(),
         )
 
+    # Private skills follow the same loader contract as the public ones — same
+    # file format, same on-disk layout, just kept apart so the public agent
+    # card endpoint never sees them. `allowed_dids` is the allowlist of caller
+    # DIDs that can read them through the auth-gated private endpoint.
+    private_skills_list = (
+        load_skills(
+            validated_config.get("private_skills") or [],
+            caller_dir or Path.cwd(),
+        )
+        if validated_config.get("private_skills")
+        else []
+    )
+    allowed_dids_list = list(validated_config.get("allowed_dids") or [])
+
     # Set agent metadata for DID document
     agent_url = (
         deployment_config.url if deployment_config else app_settings.network.default_url
@@ -527,6 +541,8 @@ def _bindufy_core(
         extra_metadata=validated_config["extra_metadata"],
         global_webhook_url=validated_config.get("global_webhook_url"),
         global_webhook_token=validated_config.get("global_webhook_token"),
+        private_skills=private_skills_list,
+        allowed_dids=allowed_dids_list,
     )
 
     # Log manifest creation

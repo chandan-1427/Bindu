@@ -1,0 +1,18 @@
+id: public-status
+name: status
+version: 1.0.0
+author: acme.compliance@example.com
+description: |
+  Public status / health endpoint. Returns generic information about the
+  service tier. Doesn't reveal what the agent actually does — that's in
+  the private catalog behind /agent/private.json.
+tags:
+  - public
+  - status
+input_modes:
+  - application/json
+output_modes:
+  - application/json
+examples:
+  - "are you online?"
+  - "what tier are you?"

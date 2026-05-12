@@ -1,0 +1,29 @@
+id: cbam-line-classify
+name: cbam-line-classify
+version: 1.0.0
+author: acme.compliance@example.com
+description: |
+  PROPRIETARY — visible only to allowlisted partner DIDs.
+
+  Classify HS codes for steel imports into the EU under CBAM transitional
+  rules. Produces line-item embedded-emission estimates from supplier mill
+  certificates plus our internal cross-reference of EU-published emission
+  factors and supplier-historical tonnage data.
+
+  This skill represents the agent's core commercial value. Exposing it in
+  the public catalog (/.well-known/agent.json) would let competitors
+  reverse-engineer our product surface. Hence it lives in `private_skills`
+  and only flows through /agent/private.json to DIDs on the allowlist.
+tags:
+  - private
+  - compliance
+  - cbam
+  - eu
+  - steel
+input_modes:
+  - application/json
+output_modes:
+  - application/json
+examples:
+  - "Classify this batch of steel imports under CBAM"
+  - "What's the embedded carbon estimate for these line items?"
