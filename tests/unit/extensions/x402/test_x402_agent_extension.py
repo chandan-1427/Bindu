@@ -103,12 +103,12 @@ class TestX402AgentExtensionWithPaymentOptions:
     def test_init_with_invalid_payment_options_type_raises_error(self):
         """Test that invalid payment_options type raises error."""
         with pytest.raises(ValueError, match="must be a non-empty list"):
-            X402AgentExtension(payment_options="not-a-list")  # type: ignore[arg-type]
+            X402AgentExtension(payment_options="not-a-list")  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
 
     def test_init_with_non_dict_payment_option_raises_error(self):
         """Test that non-dict payment option raises error."""
         with pytest.raises(ValueError, match="must contain only dictionary entries"):
-            X402AgentExtension(payment_options=["not-a-dict"])  # type: ignore[list-item]
+            X402AgentExtension(payment_options=["not-a-dict"])  # type: ignore[list-item] # ty: ignore[invalid-argument-type]
 
     def test_init_with_payment_options_missing_pay_to_address(self):
         """Test that missing pay_to_address in payment_options raises error when required."""

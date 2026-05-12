@@ -283,7 +283,7 @@ async def execute_with_retry(
     ):
         with attempt:
             logger.debug(
-                f"Executing {func.__name__} "  # type: ignore[attr-defined]
+                f"Executing {func.__name__} "  # type: ignore[attr-defined] # ty: ignore[unresolved-attribute]
                 f"(attempt {attempt.retry_state.attempt_number}/{max_attempts})"
             )
             return await func(*args, **kwargs)

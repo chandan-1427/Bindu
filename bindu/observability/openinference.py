@@ -317,7 +317,7 @@ def _setup_tracer_provider(
             )
 
             # Type ignore: _LoggingSpanExporter implements SpanExporter protocol
-            processor = BatchSpanProcessor(logging_exporter, **batch_config)  # type: ignore[arg-type]
+            processor = BatchSpanProcessor(logging_exporter, **batch_config)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
             tracer_provider.add_span_processor(processor)
 
             _log_if_verbose(

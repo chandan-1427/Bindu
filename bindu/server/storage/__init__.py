@@ -77,4 +77,4 @@ try:
 
     __all__.append("PostgresStorage")
 except ImportError:
-    PostgresStorage = None  # type: ignore[assignment]  # SQLAlchemy not installed
+    PostgresStorage = None  # type: ignore[assignment] # ty: ignore[invalid-assignment]  # SQLAlchemy not installed

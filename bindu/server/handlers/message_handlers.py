@@ -19,7 +19,7 @@ import anyio
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Mapping
 from uuid import UUID
 
 from bindu.common.protocol.types import (
@@ -117,7 +117,7 @@ class MessageHandlers:
 
     async def _submit_and_schedule_task(
         self,
-        request_params: dict[str, Any],
+        request_params: Mapping[str, Any],
         caller_did: str | None = None,
     ) -> tuple[Task, UUID]:
         """Submit task to storage and schedule it with shared send/stream logic."""

@@ -122,8 +122,8 @@ def init_sentry() -> bool:
             max_breadcrumbs=app_settings.sentry.max_breadcrumbs,
             attach_stacktrace=app_settings.sentry.attach_stacktrace,
             debug=app_settings.sentry.debug,
-            before_send=_before_send,
-            before_send_transaction=_before_send_transaction,
+            before_send=_before_send,  # ty: ignore[invalid-argument-type]
+            before_send_transaction=_before_send_transaction,  # ty: ignore[invalid-argument-type]
             ignore_errors=app_settings.sentry.ignore_errors,
         )
 

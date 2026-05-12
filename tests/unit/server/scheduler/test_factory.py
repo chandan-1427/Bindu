@@ -23,7 +23,7 @@ class TestSchedulerFactory:
     @pytest.mark.asyncio
     async def test_create_scheduler_invalid_backend_raises(self):
         """Test that invalid backend raises ValueError."""
-        config = SchedulerConfig(type="invalid")  # type: ignore[arg-type]
+        config = SchedulerConfig(type="invalid")  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
 
         with pytest.raises(ValueError, match="Unknown scheduler backend"):
             await create_scheduler(config)

@@ -109,7 +109,7 @@ def _get_or_create_calculator(app: BinduApplication) -> CapabilityCalculator:
         and hasattr(app, "_negotiation_calculator_manifest_id")
         and app._negotiation_calculator_manifest_id == id(app.manifest)
     ):
-        return app._negotiation_calculator  # type: ignore[return-value]
+        return app._negotiation_calculator  # type: ignore[return-value] # ty: ignore[invalid-return-type]
 
     # Create new calculator
     skills = app.manifest.skills or [] if app.manifest else []
@@ -134,8 +134,8 @@ def _get_or_create_calculator(app: BinduApplication) -> CapabilityCalculator:
     )
 
     # Cache calculator and manifest ID
-    app._negotiation_calculator = calculator  # type: ignore[attr-defined]
-    app._negotiation_calculator_manifest_id = id(app.manifest)  # type: ignore[attr-defined]
+    app._negotiation_calculator = calculator  # type: ignore[attr-defined] # ty: ignore[unresolved-attribute]
+    app._negotiation_calculator_manifest_id = id(app.manifest)  # type: ignore[attr-defined] # ty: ignore[unresolved-attribute]
 
     logger.debug("Created and cached new CapabilityCalculator instance")
     return calculator

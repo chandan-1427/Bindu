@@ -68,7 +68,7 @@ def _build_app(
     *,
     verify_result: VerifyResponse,
     nonce_store: InMemoryNonceStore | None = None,
-    protected_methods: set[str] | None = None,
+    protected_methods: list[str] | None = None,
 ):
     """Spin up a minimal Starlette app with the middleware in front of
     an agent that simply echoes ``OK``."""
@@ -91,7 +91,7 @@ def _build_app(
     from bindu.settings import app_settings
 
     original = app_settings.x402.protected_methods
-    app_settings.x402.protected_methods = protected_methods or {"message/send"}
+    app_settings.x402.protected_methods = protected_methods or ["message/send"]
 
     store = nonce_store or InMemoryNonceStore()
 
@@ -120,7 +120,7 @@ def _restore_protected_methods():
     # safety net in case a test forgets to restore
     from bindu.settings import app_settings  # noqa: WPS433
 
-    app_settings.x402.protected_methods = {"message/send"}
+    app_settings.x402.protected_methods = ["message/send"]
 
 
 class TestBodyParseFailure:
@@ -170,7 +170,7 @@ class TestMissingPaymentHeader:
     def test_unprotected_method_skips_payment(self, _restore_protected_methods):
         app, restore, *_ = _build_app(
             verify_result=VerifyResponse(is_valid=True, payer="0xbeef"),
-            protected_methods={"message/send"},
+            protected_methods=["message/send"],
         )
         try:
             client = TestClient(app)

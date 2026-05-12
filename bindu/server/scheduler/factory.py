@@ -19,7 +19,7 @@ try:
 
     REDIS_AVAILABLE = True
 except ImportError:
-    RedisScheduler = None  # type: ignore[assignment]  # redis not installed
+    RedisScheduler = None  # type: ignore[assignment] # ty: ignore[invalid-assignment]  # redis not installed
     REDIS_AVAILABLE = False
 
 logger = get_logger("bindu.server.scheduler.factory")

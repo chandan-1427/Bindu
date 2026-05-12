@@ -30,7 +30,7 @@ class TestInMemoryScheduler:
                 "messages": [],
             }
 
-            await scheduler.run_task(task_params)  # type: ignore[arg-type]
+            await scheduler.run_task(task_params)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
 
             # Verify task was queued
             operation = await scheduler._read_stream.receive()
@@ -46,7 +46,7 @@ class TestInMemoryScheduler:
             task_id = str(uuid4())
             params = {"task_id": task_id}
 
-            await scheduler.cancel_task(params)  # type: ignore[arg-type]
+            await scheduler.cancel_task(params)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
 
             operation = await scheduler._read_stream.receive()
             assert operation["operation"] == "cancel"
@@ -61,7 +61,7 @@ class TestInMemoryScheduler:
             task_id = str(uuid4())
             params = {"task_id": task_id}
 
-            await scheduler.pause_task(params)  # type: ignore[arg-type]
+            await scheduler.pause_task(params)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
 
             operation = await scheduler._read_stream.receive()
             assert operation["operation"] == "pause"
@@ -76,7 +76,7 @@ class TestInMemoryScheduler:
             task_id = str(uuid4())
             params = {"task_id": task_id}
 
-            await scheduler.resume_task(params)  # type: ignore[arg-type]
+            await scheduler.resume_task(params)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
 
             operation = await scheduler._read_stream.receive()
             assert operation["operation"] == "resume"
@@ -93,9 +93,9 @@ class TestInMemoryScheduler:
             params = {"task_id": str(task_id)}
 
             await scheduler.run_task(
-                {"task_id": task_id, "context_id": context_id, "message": {}}  # type: ignore[typeddict-item]
+                {"task_id": task_id, "context_id": context_id, "message": {}}  # type: ignore[typeddict-item] # ty: ignore[missing-typed-dict-key, invalid-argument-type]
             )
-            await scheduler.cancel_task(params)  # type: ignore[arg-type]
+            await scheduler.cancel_task(params)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
 
             operations = []
             async for operation in scheduler.receive_task_operations():

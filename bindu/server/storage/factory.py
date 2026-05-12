@@ -28,7 +28,7 @@ try:
 
     POSTGRES_AVAILABLE = True
 except ImportError:
-    PostgresStorage = None  # type: ignore[assignment]  # SQLAlchemy not installed
+    PostgresStorage = None  # type: ignore[assignment] # ty: ignore[invalid-assignment]  # SQLAlchemy not installed
     POSTGRES_AVAILABLE = False
 
 logger = get_logger("bindu.server.storage.factory")

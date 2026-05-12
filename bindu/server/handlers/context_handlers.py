@@ -99,10 +99,14 @@ class ContextHandlers:
                 ClearContextsResponse, request["id"], ContextNotFoundError, str(e)
             )
 
+        # The declared response type is `JSONRPCResponse[Context, ...]` but
+        # this endpoint returns a simple success message rather than a Context
+        # row. Aligning the protocol type to a fresh `ContextClearedResult`
+        # TypedDict is a follow-up; for now we silence the shape mismatch.
         return ClearContextsResponse(
             jsonrpc="2.0",
             id=request["id"],
             result={
-                "message": f"Context {context_id} and all associated tasks cleared successfully"
-            },
+                "message": f"Context {context_id} and all associated tasks cleared successfully"  # ty: ignore[invalid-key]
+            },  # ty: ignore[missing-typed-dict-key]
         )

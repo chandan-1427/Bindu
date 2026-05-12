@@ -28,7 +28,7 @@ class TestManifestWorker:
         ]
 
         # The method delegates to MessageConverter.to_chat_format
-        result = worker.build_message_history(messages)  # type: ignore[arg-type]
+        result = worker.build_message_history(messages)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
 
         # Result type depends on MessageConverter implementation
         assert isinstance(result, list)

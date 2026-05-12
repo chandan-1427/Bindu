@@ -76,7 +76,7 @@ class RedisScheduler(Scheduler):
             retry_on_timeout=self.retry_on_timeout,
         )
         try:
-            await self._redis_client.ping()
+            await self._redis_client.ping()  # ty: ignore[invalid-await]
             logger.info(f"Redis scheduler connected to {self.redis_url}")
         except redis.RedisError as e:
             logger.error(f"Failed to connect to Redis: {e}")

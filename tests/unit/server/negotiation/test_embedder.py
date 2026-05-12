@@ -56,7 +56,7 @@ class TestSkillEmbedder:
 
         with patch("bindu.server.negotiation.embedder.app_settings") as mock_settings:
             mock_settings.negotiation.embedding_api_key = None
-            embedder._api_key = None
+            embedder._api_key = None  # type: ignore[assignment] # ty: ignore[invalid-assignment]
 
             with pytest.raises(ValueError, match="API key not configured"):
                 await embedder._embed_with_openrouter(["test text"])

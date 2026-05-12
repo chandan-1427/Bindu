@@ -37,7 +37,7 @@ def prepare_server_display(
     # encoding in-place without closing stdout.
     if hasattr(sys.stdout, "reconfigure"):
         try:
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[call-non-callable]
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[call-non-callable] # ty: ignore[call-non-callable]
         except Exception:
             pass
     console = Console()

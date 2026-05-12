@@ -57,7 +57,7 @@ class TestCreateSignaturePayload:
         HTTP body."""
         with pytest.raises(TypeError, match="json.dumps"):
             create_signature_payload(
-                {"x": 1},  # type: ignore[arg-type]
+                {"x": 1},  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
                 did="did:bindu:test",
                 timestamp=1000,
             )
@@ -66,7 +66,7 @@ class TestCreateSignaturePayload:
         """Any non-str/bytes rejected — not just dict."""
         with pytest.raises(TypeError, match="str or bytes"):
             create_signature_payload(
-                [1, 2, 3],  # type: ignore[arg-type]
+                [1, 2, 3],  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
                 did="did:bindu:test",
                 timestamp=1000,
             )
@@ -136,7 +136,7 @@ class TestSignRequest:
         """Same TypeError as create_signature_payload — dict is out."""
         with pytest.raises(TypeError):
             sign_request(
-                body={"x": 1},  # type: ignore[arg-type]
+                body={"x": 1},  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
                 did="did:bindu:t",
                 did_extension=self._FakeExt(),
                 timestamp=1000,

@@ -17,7 +17,7 @@ without needing filesystem access.
 
 import yaml
 from pathlib import Path
-from typing import Any, Dict, List, Union, cast
+from typing import Any, Dict, List, Sequence, Union, cast
 
 from bindu.common.protocol.types import Skill
 from bindu.utils.logging import get_logger
@@ -287,7 +287,7 @@ def load_skill_from_directory(skill_path: Union[str, Path], caller_dir: Path) ->
 
 
 def load_skills(
-    skills_config: List[Union[str, Dict[str, Any]]], caller_dir: Path
+    skills_config: Sequence[Union[str, Dict[str, Any]]], caller_dir: Path
 ) -> List[Skill]:
     """Load skills from configuration.
 

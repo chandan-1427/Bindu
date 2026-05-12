@@ -179,8 +179,8 @@ class FilePart(TextPart):
     The file content can be provided either directly as bytes or as a URI.
     """
 
-    kind: Required[Literal["file"]]
-    """The kind of the part."""
+    kind: Required[Literal["file"]]  # ty: ignore[invalid-typed-dict-field]
+    """The kind of the part. Narrows the parent's Literal["text"] to ["file"]."""
 
     file: Required[FileWithBytes | FileWithUri]
     """The file of the part."""
@@ -192,8 +192,8 @@ class FilePart(TextPart):
 class DataPart(TextPart):
     """Represents a structured data segment (e.g., JSON) within a message or artifact."""
 
-    kind: Required[Literal["data"]]
-    """The kind of the part."""
+    kind: Required[Literal["data"]]  # ty: ignore[invalid-typed-dict-field]
+    """The kind of the part. Narrows the parent's Literal["text"] to ["data"]."""
 
     data: Required[dict[str, Any]]
     """The data of the part."""
