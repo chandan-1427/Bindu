@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+	/* Surfaces */
+	--color-panel: #ffffff;
+	--color-sidebar: #fafbfd;
+	--color-rail: #fafbfd;
+	--color-row-hover: rgba(15, 23, 42, 0.035);
+	--color-row-active: rgba(37, 99, 235, 0.07);
+	--color-border-soft: rgba(15, 23, 42, 0.06);
+	--color-border: rgba(15, 23, 42, 0.1);
+	--color-border-strong: rgba(15, 23, 42, 0.16);
+
+	/* Text */
+	--color-fg: #0f172a;
+	--color-fg-muted: #475569;
+	--color-fg-dim: #64748b;
+	--color-fg-faint: #94a3b8;
+
+	/* Brand trio */
+	--color-cobalt: #1e40af; /* primary, links, active */
+	--color-cobalt-strong: #1d4ed8;
+	--color-cobalt-soft: #dbeafe;
+	--color-sunflower: #facc15; /* agent identity, attention */
+	--color-sunflower-strong: #eab308;
+	--color-sunflower-soft: #fef3c7;
+
+	/* Semantic (used sparingly) */
+	--color-ok: #059669;
+	--color-bad: #e11d48;
+
+	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
+		Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+	font-family: var(--font-mono);
+	font-feature-settings: "ss01", "cv11";
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+body {
+	background-color: var(--color-panel);
+	color: var(--color-fg);
+}
+
+/* Subtle scrollbar */
+.scrollbar::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+.scrollbar::-webkit-scrollbar-track {
+	background: transparent;
+}
+.scrollbar::-webkit-scrollbar-thumb {
+	background: rgba(15, 23, 42, 0.12);
+	border-radius: 999px;
+}
+.scrollbar::-webkit-scrollbar-thumb:hover {
+	background: rgba(15, 23, 42, 0.22);
+}
+
+/* Live pulse */
+@keyframes live-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.4;
+	}
+}
+.live-pulse {
+	animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+/* Bindu sunflower mark — used for agent identity */
+.bindu-mark {
+	background-image: url("/bindu.png");
+	background-size: contain;
+	background-repeat: no-repeat;
+	background-position: center;
+}
