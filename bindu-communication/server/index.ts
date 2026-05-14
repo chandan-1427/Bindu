@@ -10,13 +10,33 @@ import {
 	writeAgent,
 } from "./db";
 
-// agentId → base URL for callbacks. Hardcoded for the dev fleet; real
-// production deployments would learn this from a signed payload field.
-const AGENT_URLS: Record<string, string> = {
+// agentId → base URL for callbacks. Defaults cover the dev fleet; override
+// or extend via BINDU_AGENT_URLS env var, comma-separated `id=url` pairs:
+//   BINDU_AGENT_URLS="agno-simple=http://10.0.0.5:3773,my-agent=http://x:9000"
+// Anything in the env var wins over the defaults. Real production should
+// learn this from a signed payload field on the webhook itself; that's a
+// follow-up that requires a Bindu core change.
+const AGENT_URL_DEFAULTS: Record<string, string> = {
 	"agno-simple": "http://127.0.0.1:3773",
 	"agno-paywall": "http://127.0.0.1:3775",
 	gateway: "http://127.0.0.1:3774",
 };
+
+function parseAgentUrls(): Record<string, string> {
+	const out: Record<string, string> = { ...AGENT_URL_DEFAULTS };
+	const raw = process.env.BINDU_AGENT_URLS;
+	if (!raw) return out;
+	for (const pair of raw.split(",")) {
+		const eq = pair.indexOf("=");
+		if (eq <= 0) continue;
+		const id = pair.slice(0, eq).trim();
+		const url = pair.slice(eq + 1).trim();
+		if (id && url) out[id] = url;
+	}
+	return out;
+}
+
+const AGENT_URLS = parseAgentUrls();
 
 const subscribers = new Set<(e: EventRow) => void>();
 
