@@ -1,6 +1,7 @@
 export type TrustLevel = "self" | "trusted" | "known" | "new" | "untrusted";
 
 export type EventState =
+	| "submitted"
 	| "pending"
 	| "working"
 	| "input-required"

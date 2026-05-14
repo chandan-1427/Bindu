@@ -47,6 +47,11 @@ export const stateMeta: Record<
 	EventState,
 	{ color: string; bg: string; border: string }
 > = {
+	submitted: {
+		color: "text-slate-700",
+		bg: "bg-slate-100",
+		border: "border-slate-300",
+	},
 	pending: {
 		color: "text-slate-600",
 		bg: "bg-slate-100",

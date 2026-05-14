@@ -38,13 +38,18 @@ agent = Agent(
 # automatically loaded from environment variables. See .env.example for details.
 config = {
     "author": "your.email@example.com",
-    "name": "research_agent",
-    "description": "A research assistant agent",
+    "name": "research_agent_paywall",
+    "description": "A research assistant agent gated by x402 payment",
     "deployment": {
-        "url": "http://localhost:3773",
+        "url": "http://localhost:3775",
         "expose": True,
         "cors_origins": ["http://localhost:5173"]
     },
+    "capabilities": {"push_notifications": True},
+    "global_webhook_url": os.getenv(
+        "BINDU_COMMS_URL",
+        "http://127.0.0.1:3787/webhooks/bindu/agno-paywall",
+    ),
     "skills": ["skills/question-answering", "skills/pdf-processing"],
     "execution_cost": {
         "amount": "$0.0001",
