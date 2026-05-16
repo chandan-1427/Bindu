@@ -41,6 +41,10 @@ export interface StreamEvent {
 	parentId?: string;
 	ts: string;
 	relTs: string;
+	/** Full ISO datetime (`2026-05-14T22:42:11.614Z`) when known.
+	 * Used for Gmail-style "3:47 PM / Mon / May 14" date rendering.
+	 * Mock events leave it undefined and the renderer falls back to relTs. */
+	at?: string;
 	counterparty: Counterparty;
 	kind: EventKind;
 	state?: EventState;

@@ -78,14 +78,14 @@ export function Sidebar() {
 				</div>
 			</div>
 
-			{/* Compose — primary action, Gmail-shape */}
+			{/* Compose — hero action, Gmail-shape */}
 			<div className="px-3 pt-4">
 				<button
 					type="button"
 					onClick={openCompose}
-					className="group flex w-full items-center gap-2 rounded-md bg-[--color-cobalt] px-3 py-2 text-left text-[12px] font-medium text-white shadow-sm transition hover:bg-[--color-cobalt-strong]"
+					className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-[--color-cobalt] px-4 py-3 text-left text-[14px] font-semibold text-white shadow-md transition hover:bg-[--color-cobalt-strong] hover:shadow-lg"
 				>
-					<PencilSimpleIcon size={14} weight="bold" />
+					<PencilSimpleIcon size={18} weight="bold" />
 					<span>Compose</span>
 				</button>
 			</div>

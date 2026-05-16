@@ -68,11 +68,13 @@ function mapOutboundEvent(raw: RawWebhook): StreamEvent {
 	const summary = p.upstream_error
 		? `Send failed: ${p.upstream_error.slice(0, 80)}`
 		: `“${(p.text ?? "").slice(0, 120)}”`;
+	const fullTs = p.timestamp ?? raw.receivedAt;
 	return {
 		id: raw.id,
 		agentId: raw.agentId,
-		ts: (p.timestamp ?? raw.receivedAt).slice(11, 19),
+		ts: fullTs.slice(11, 19),
 		relTs: "just now",
+		at: fullTs,
 		counterparty: {
 			name: p.to_agent_id ?? "agent",
 			did: p.to_did ?? `did:bindu:?:${p.to_agent_id ?? "?"}`,
@@ -135,12 +137,14 @@ function mapGatewayEvent(raw: RawWebhook): StreamEvent {
 	const sigs = (props.signatures as Record<string, unknown> | null | undefined) ?? null;
 	const signed = !!sigs && (sigs.signed as number) > 0;
 
+	const gwTs = p.timestamp ?? raw.receivedAt;
 	return {
 		id: raw.id,
 		agentId: raw.agentId,
 		parentId: p.parent_id || undefined,
-		ts: (p.timestamp ?? raw.receivedAt).slice(11, 19),
+		ts: gwTs.slice(11, 19),
 		relTs: "live",
+		at: gwTs,
 		counterparty: {
 			name: counterpartyName,
 			did: `did:bindu:gateway:${String(props.sessionID ?? "?").slice(0, 8)}`,
@@ -192,11 +196,13 @@ export function mapWebhookToEvent(raw: RawWebhook): StreamEvent {
 	// the webhook URL/token, not cryptographically signed. Mark honestly
 	// as unsigned. Real Ed25519 verification of artifact bodies is a
 	// future change.
+	const lifecycleTs = p.timestamp ?? raw.receivedAt;
 	return {
 		id: raw.id,
 		agentId: raw.agentId,
-		ts: (p.timestamp ?? raw.receivedAt).slice(11, 19),
+		ts: lifecycleTs.slice(11, 19),
 		relTs: "live",
+		at: lifecycleTs,
 		counterparty: {
 			name: taskShort,
 			did: `did:bindu:task:${p.task_id ?? "?"}`,

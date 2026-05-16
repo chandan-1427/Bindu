@@ -17,6 +17,7 @@ import {
 	threadInFolder,
 	type Thread,
 } from "~/lib/threads";
+import { formatListDate } from "~/lib/format-date";
 import type { StreamEvent } from "~/types";
 
 interface Props {
@@ -332,7 +333,7 @@ function ThreadRow({
 						</span>
 					)}
 					<span className="ml-auto shrink-0 text-[11px] text-fg-dim">
-						{e.relTs}
+						{formatListDate(e.at, e.relTs)}
 					</span>
 					{/* Hover actions — read/unread + archive/restore */}
 					<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">

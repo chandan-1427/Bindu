@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams } from "react-router";
 import clsx from "clsx";
 import {
-	PencilSimpleIcon,
 	TrayIcon,
 	MagnifyingGlassIcon,
 	XIcon,
 	ShieldCheckIcon,
+	ArrowsClockwiseIcon,
 } from "@phosphor-icons/react";
 import { events as mockEvents } from "~/data/mock";
 import { useUI } from "~/state";
@@ -35,6 +35,34 @@ function DetailRailToggle() {
 	);
 }
 
+function RefreshButton() {
+	const hydrateThreadState = useUI((s) => s.hydrateThreadState);
+	const [spinning, setSpinning] = useState(false);
+	async function onClick() {
+		setSpinning(true);
+		try {
+			await hydrateThreadState();
+		} finally {
+			// Keep the spin visible briefly so the click feels real.
+			setTimeout(() => setSpinning(false), 350);
+		}
+	}
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			title="Refresh"
+			className="flex items-center rounded-md border border-[--color-border] bg-white p-1.5 text-fg-muted transition hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
+		>
+			<ArrowsClockwiseIcon
+				size={12}
+				weight="bold"
+				className={spinning ? "animate-spin" : undefined}
+			/>
+		</button>
+	);
+}
+
 type Folder = "inbox" | "sent" | "drafts" | "archive";
 type Mode = { kind: "folder"; folder: Folder } | { kind: "agent"; agentId: string };
 
@@ -55,7 +83,6 @@ export function StreamPanel() {
 	const liveEvents = useUI((s) => s.liveEvents);
 	const selectedThreadId = useUI((s) => s.selectedThreadId);
 	const selectThread = useUI((s) => s.selectThread);
-	const openCompose = useUI((s) => s.openCompose);
 	const [query, setQuery] = useState("");
 
 	// Clear the open thread + search when the user switches folder / agent —
@@ -124,15 +151,8 @@ export function StreamPanel() {
 					)}
 				</div>
 				<div className="flex items-center gap-2">
+					<RefreshButton />
 					{selectedThreadId && <DetailRailToggle />}
-					<button
-						type="button"
-						onClick={openCompose}
-						className="flex items-center gap-1.5 rounded-md bg-[--color-cobalt] px-2.5 py-1 text-[11px] font-medium text-white shadow-sm transition hover:bg-[--color-cobalt-strong]"
-					>
-						<PencilSimpleIcon size={11} weight="fill" />
-						Compose
-					</button>
 				</div>
 			</header>
 			{/* MailboxSplitView — list shrinks to 380px when a thread opens,
