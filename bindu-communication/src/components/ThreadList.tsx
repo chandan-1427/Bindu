@@ -18,6 +18,29 @@ import type { StreamEvent } from "~/types";
 interface Props {
 	events: StreamEvent[];
 	mode?: "inbox" | "sent" | "archive";
+	query?: string;
+}
+
+function matchesQuery(t: Thread, q: string): boolean {
+	if (!q) return true;
+	const needle = q.toLowerCase();
+	const e = t.latest;
+	if (e.counterparty.name.toLowerCase().includes(needle)) return true;
+	if (e.counterparty.did.toLowerCase().includes(needle)) return true;
+	if (e.summary.toLowerCase().includes(needle)) return true;
+	if (t.contextId.toLowerCase().includes(needle)) return true;
+	if (e.payload) {
+		try {
+			const p = JSON.parse(e.payload) as Record<string, unknown>;
+			const text = typeof p.text === "string" ? (p.text as string).toLowerCase() : "";
+			if (text.includes(needle)) return true;
+			const eventType = typeof p.event_type === "string" ? (p.event_type as string).toLowerCase() : "";
+			if (eventType.includes(needle)) return true;
+		} catch {
+			// no-op
+		}
+	}
+	return false;
 }
 
 const OUTBOX_AGENT_ID = "outbox";
@@ -32,7 +55,7 @@ const OUTBOX_AGENT_ID = "outbox";
  * attentionCount > 0. Overrides persist to localStorage so the user's
  * triage state survives refreshes.
  */
-export function ThreadList({ events, mode = "inbox" }: Props) {
+export function ThreadList({ events, mode = "inbox", query = "" }: Props) {
 	const selectThread = useUI((s) => s.selectThread);
 	const selectEvent = useUI((s) => s.selectEvent);
 	const readOverrides = useUI((s) => s.readOverrides);
@@ -41,7 +64,10 @@ export function ThreadList({ events, mode = "inbox" }: Props) {
 	const markUnread = useUI((s) => s.markUnread);
 	const archiveThread = useUI((s) => s.archiveThread);
 	const unarchiveThread = useUI((s) => s.unarchiveThread);
-	const threads = groupByThread(events);
+	const allThreads = groupByThread(events);
+	const threads = query
+		? allThreads.filter((t) => matchesQuery(t, query))
+		: allThreads;
 
 	function isUnread(t: Thread): boolean {
 		if (unreadOverrides.has(t.contextId)) return true;
@@ -50,14 +76,17 @@ export function ThreadList({ events, mode = "inbox" }: Props) {
 	}
 
 	if (threads.length === 0) {
+		const isFiltered = !!query && allThreads.length > 0;
 		return (
 			<div className="flex flex-col items-center justify-center px-6 py-24 text-center">
 				<TrayIcon size={48} weight="thin" className="mb-4 text-fg-dim" />
 				<h3 className="mb-1 text-[15px] font-semibold text-fg">
-					Nothing to show
+					{isFiltered ? "No matches" : "Nothing to show"}
 				</h3>
 				<p className="max-w-xs text-[12px] text-fg-muted">
-					When a thread arrives in this folder, it'll appear here.
+					{isFiltered
+						? `No threads matched “${query}”. Clear the search to see all threads.`
+						: "When a thread arrives in this folder, it'll appear here."}
 				</p>
 			</div>
 		);

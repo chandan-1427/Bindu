@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams } from "react-router";
 import clsx from "clsx";
 import {
@@ -6,6 +6,8 @@ import {
 	PlayIcon,
 	PencilSimpleIcon,
 	TrayIcon,
+	MagnifyingGlassIcon,
+	XIcon,
 } from "@phosphor-icons/react";
 import { events as mockEvents } from "~/data/mock";
 import { useUI } from "~/state";
@@ -39,12 +41,14 @@ export function StreamPanel() {
 	const selectThread = useUI((s) => s.selectThread);
 	const openCompose = useUI((s) => s.openCompose);
 	const archivedThreads = useUI((s) => s.archivedThreads);
+	const [query, setQuery] = useState("");
 
-	// Clear the open thread when the user switches folder / agent — a
-	// context_id belongs to one selection, not another's.
+	// Clear the open thread + search when the user switches folder / agent —
+	// a context_id and a search term belong to one selection, not another's.
 	const modeKey = mode.kind === "folder" ? `folder:${mode.folder}` : `agent:${mode.agentId}`;
 	useEffect(() => {
 		selectThread(null);
+		setQuery("");
 	}, [modeKey, selectThread]);
 
 	const filteredEvents = useMemo(() => {
@@ -85,13 +89,39 @@ export function StreamPanel() {
 
 	return (
 		<main className="flex min-w-0 flex-1 flex-col">
-			<header className="flex items-center justify-between border-b border-[--color-border-soft] bg-[--color-panel] px-6 py-3">
-				<div className="flex items-baseline gap-3">
+			<header className="flex items-center justify-between gap-4 border-b border-[--color-border-soft] bg-[--color-panel] px-6 py-3">
+				<div className="flex min-w-0 items-baseline gap-3">
 					{mode.kind === "folder" && (
 						<TrayIcon size={16} weight="duotone" className="text-fg-muted" />
 					)}
-					<h1 className="text-[14px] font-medium text-fg">{title}</h1>
-					<span className="text-[11px] text-fg-dim">{subtitle}</span>
+					<h1 className="shrink-0 text-[14px] font-medium text-fg">{title}</h1>
+					<span className="hidden truncate text-[11px] text-fg-dim md:inline">
+						{subtitle}
+					</span>
+				</div>
+				<div className="relative max-w-[320px] flex-1">
+					<MagnifyingGlassIcon
+						size={12}
+						weight="bold"
+						className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-fg-dim"
+					/>
+					<input
+						type="text"
+						value={query}
+						onChange={(e) => setQuery(e.target.value)}
+						placeholder="Search in this folder…"
+						className="w-full rounded-md border border-[--color-border-soft] bg-slate-50 py-1 pl-6 pr-7 text-[12px] text-fg placeholder-fg-faint outline-none transition focus:border-[--color-cobalt] focus:bg-white focus:ring-2 focus:ring-[--color-cobalt-soft]"
+					/>
+					{query && (
+						<button
+							type="button"
+							onClick={() => setQuery("")}
+							title="Clear"
+							className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-fg-dim hover:bg-slate-200 hover:text-fg"
+						>
+							<XIcon size={10} weight="bold" />
+						</button>
+					)}
 				</div>
 				<div className="flex items-center gap-3">
 					<button
@@ -145,6 +175,7 @@ export function StreamPanel() {
 						<ThreadList
 							events={filteredEvents}
 							mode={mode.kind === "folder" ? mode.folder : "inbox"}
+							query={query}
 						/>
 					</div>
 				</div>
