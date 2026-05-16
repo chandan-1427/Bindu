@@ -3,11 +3,16 @@ import { serve } from "@hono/node-server";
 import {
 	type AgentRecord,
 	type EventRow,
+	archiveThread,
 	listAgents,
 	listEcosystem,
 	listRecentEvents,
+	listThreadState,
+	markThreadRead,
+	markThreadUnread,
 	readAgent,
 	recordEvent,
+	unarchiveThread,
 	writeAgent,
 } from "./db";
 
@@ -241,6 +246,40 @@ app.post("/api/ecosystem", async (c) => {
 	writeAgent(rec);
 	if (!(id in AGENT_URLS)) AGENT_URLS[id] = url;
 	return c.json(rec, 201);
+});
+
+// Thread state — operator-side triage flags (read / unread / archived)
+// keyed by context_id. Source of truth lives in SQLite; the frontend's
+// localStorage caches are gone in favor of this.
+app.get("/api/threads/state", (c) => {
+	const blocked = authMiddleware(c);
+	if (blocked) return c.json(blocked, 401);
+	return c.json(listThreadState());
+});
+
+app.post("/api/threads/:contextId/:action", async (c) => {
+	const blocked = authMiddleware(c);
+	if (blocked) return c.json(blocked, 401);
+	const contextId = c.req.param("contextId");
+	const action = c.req.param("action");
+	if (!contextId) return c.json({ error: "missing-context" }, 400);
+	switch (action) {
+		case "read":
+			markThreadRead(contextId);
+			break;
+		case "unread":
+			markThreadUnread(contextId);
+			break;
+		case "archive":
+			archiveThread(contextId);
+			break;
+		case "unarchive":
+			unarchiveThread(contextId);
+			break;
+		default:
+			return c.json({ error: "unknown-action" }, 400);
+	}
+	return c.json({ ok: true });
 });
 
 // Step 2: compose. Operator sends an outbound `message/send` to a known

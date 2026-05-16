@@ -61,33 +61,32 @@ interface UIState {
 	deleteDraft: (id: string) => void;
 	composeDraftId: string | null;
 	openComposeWith: (draftId: string | null) => void;
+	hydrateThreadState: () => Promise<void>;
 }
 
-const READ_LS_KEY = "bindu-comms:read-overrides";
-const UNREAD_LS_KEY = "bindu-comms:unread-overrides";
-const ARCHIVE_LS_KEY = "bindu-comms:archived-threads";
 const DRAFTS_LS_KEY = "bindu-comms:drafts";
 
-function loadSet(key: string): Set<string> {
-	if (typeof window === "undefined") return new Set();
-	try {
-		const raw = window.localStorage.getItem(key);
-		if (!raw) return new Set();
-		const arr = JSON.parse(raw) as unknown;
-		if (!Array.isArray(arr)) return new Set();
-		return new Set(arr.filter((x): x is string => typeof x === "string"));
-	} catch {
-		return new Set();
-	}
+interface ThreadStateRow {
+	contextId: string;
+	readAt: string | null;
+	unreadAt: string | null;
+	archivedAt: string | null;
 }
 
-function saveSet(key: string, s: Set<string>): void {
-	if (typeof window === "undefined") return;
-	try {
-		window.localStorage.setItem(key, JSON.stringify(Array.from(s)));
-	} catch {
-		// quota or denied — just skip persistence
-	}
+function postThreadAction(
+	contextId: string,
+	action: "read" | "unread" | "archive" | "unarchive",
+): void {
+	// Fire-and-forget — local state already updated optimistically.
+	void fetch(
+		`/api/threads/${encodeURIComponent(contextId)}/${action}`,
+		{ method: "POST" },
+	).catch(() => {
+		// Server unreachable: optimistic local state stays; next hydrate
+		// will reconcile. Logging only for dev visibility.
+		// eslint-disable-next-line no-console
+		console.warn(`[thread-state] ${action} failed to sync for ${contextId}`);
+	});
 }
 
 function loadDrafts(): Draft[] {
@@ -129,9 +128,9 @@ export const useUI = create<UIState>((set) => ({
 	showCompose: false,
 	agents: seedAgents,
 	liveEvents: [],
-	readOverrides: loadSet(READ_LS_KEY),
-	unreadOverrides: loadSet(UNREAD_LS_KEY),
-	archivedThreads: loadSet(ARCHIVE_LS_KEY),
+	readOverrides: new Set(),
+	unreadOverrides: new Set(),
+	archivedThreads: new Set(),
 	drafts: loadDrafts(),
 	composeDraftId: null,
 
@@ -144,8 +143,7 @@ export const useUI = create<UIState>((set) => ({
 			const unread = new Set(s.unreadOverrides);
 			read.add(contextId);
 			unread.delete(contextId);
-			saveSet(READ_LS_KEY, read);
-			saveSet(UNREAD_LS_KEY, unread);
+			postThreadAction(contextId, "read");
 			return {
 				selectedThreadId: contextId,
 				readOverrides: read,
@@ -204,8 +202,7 @@ export const useUI = create<UIState>((set) => ({
 			const unread = new Set(s.unreadOverrides);
 			read.add(contextId);
 			unread.delete(contextId);
-			saveSet(READ_LS_KEY, read);
-			saveSet(UNREAD_LS_KEY, unread);
+			postThreadAction(contextId, "read");
 			return { readOverrides: read, unreadOverrides: unread };
 		}),
 	markUnread: (contextId) =>
@@ -214,15 +211,14 @@ export const useUI = create<UIState>((set) => ({
 			const unread = new Set(s.unreadOverrides);
 			read.delete(contextId);
 			unread.add(contextId);
-			saveSet(READ_LS_KEY, read);
-			saveSet(UNREAD_LS_KEY, unread);
+			postThreadAction(contextId, "unread");
 			return { readOverrides: read, unreadOverrides: unread };
 		}),
 	archiveThread: (contextId) =>
 		set((s) => {
 			const archived = new Set(s.archivedThreads);
 			archived.add(contextId);
-			saveSet(ARCHIVE_LS_KEY, archived);
+			postThreadAction(contextId, "archive");
 			// Closing the thread on archive matches Gmail UX: the row disappears
 			// from the visible folder and the panel collapses.
 			return {
@@ -235,9 +231,31 @@ export const useUI = create<UIState>((set) => ({
 		set((s) => {
 			const archived = new Set(s.archivedThreads);
 			archived.delete(contextId);
-			saveSet(ARCHIVE_LS_KEY, archived);
+			postThreadAction(contextId, "unarchive");
 			return { archivedThreads: archived };
 		}),
+	hydrateThreadState: async () => {
+		try {
+			const r = await fetch("/api/threads/state");
+			if (!r.ok) return;
+			const rows = (await r.json()) as ThreadStateRow[];
+			const read = new Set<string>();
+			const unread = new Set<string>();
+			const archived = new Set<string>();
+			for (const row of rows) {
+				if (row.archivedAt) archived.add(row.contextId);
+				if (row.unreadAt && !row.readAt) unread.add(row.contextId);
+				else if (row.readAt) read.add(row.contextId);
+			}
+			set({
+				readOverrides: read,
+				unreadOverrides: unread,
+				archivedThreads: archived,
+			});
+		} catch {
+			// server unreachable — keep whatever the local optimistic state was
+		}
+	},
 	addLiveEvent: (e) =>
 		set((s) => {
 			const agents = s.agents.find((a) => a.id === e.agentId)

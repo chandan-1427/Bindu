@@ -35,6 +35,13 @@ db.exec(`
 		first_seen_at   TEXT NOT NULL,
 		PRIMARY KEY (agent_id, context_id)
 	);
+
+	CREATE TABLE IF NOT EXISTS thread_state (
+		context_id      TEXT PRIMARY KEY,
+		read_at         TEXT,
+		unread_at       TEXT,
+		archived_at     TEXT
+	);
 `);
 
 export interface EventRow {
@@ -192,4 +199,70 @@ export function writeAgent(rec: AgentRecord): void {
 		source: rec.source ?? "webhook",
 		addedAt: rec.addedAt ?? null,
 	});
+}
+
+// --- thread state (read / unread / archive) -----------------------------
+// Source of truth for operator triage state, replacing the previous
+// localStorage-only model. Stored per-thread (context_id), independent of
+// any agentId — a thread's read/archive state spans lanes.
+
+const stateUpdate = db.prepare(`
+	INSERT INTO thread_state (context_id, read_at, unread_at, archived_at)
+	VALUES (@contextId, @readAt, @unreadAt, @archivedAt)
+	ON CONFLICT(context_id) DO UPDATE SET
+		read_at      = COALESCE(@readAt, thread_state.read_at),
+		unread_at    = COALESCE(@unreadAt, thread_state.unread_at),
+		archived_at  = COALESCE(@archivedAt, thread_state.archived_at)
+`);
+
+const stateClear = db.prepare(`
+	UPDATE thread_state SET
+		read_at      = CASE WHEN @clearRead     = 1 THEN NULL ELSE read_at END,
+		unread_at    = CASE WHEN @clearUnread   = 1 THEN NULL ELSE unread_at END,
+		archived_at  = CASE WHEN @clearArchived = 1 THEN NULL ELSE archived_at END
+	WHERE context_id = @contextId
+`);
+
+const stateList = db.prepare(
+	"SELECT context_id AS contextId, read_at AS readAt, unread_at AS unreadAt, archived_at AS archivedAt FROM thread_state",
+);
+
+export interface ThreadStateRow {
+	contextId: string;
+	readAt: string | null;
+	unreadAt: string | null;
+	archivedAt: string | null;
+}
+
+export function markThreadRead(contextId: string): void {
+	const now = new Date().toISOString();
+	stateUpdate.run({ contextId, readAt: now, unreadAt: null, archivedAt: null });
+	// Clearing unread_at must be explicit because the upsert above only ever
+	// COALESCEs new values in.
+	stateClear.run({ contextId, clearRead: 0, clearUnread: 1, clearArchived: 0 });
+}
+
+export function markThreadUnread(contextId: string): void {
+	const now = new Date().toISOString();
+	stateUpdate.run({ contextId, readAt: null, unreadAt: now, archivedAt: null });
+	stateClear.run({ contextId, clearRead: 1, clearUnread: 0, clearArchived: 0 });
+}
+
+export function archiveThread(contextId: string): void {
+	const now = new Date().toISOString();
+	stateUpdate.run({ contextId, readAt: null, unreadAt: null, archivedAt: now });
+}
+
+export function unarchiveThread(contextId: string): void {
+	stateUpdate.run({
+		contextId,
+		readAt: null,
+		unreadAt: null,
+		archivedAt: null,
+	});
+	stateClear.run({ contextId, clearRead: 0, clearUnread: 0, clearArchived: 1 });
+}
+
+export function listThreadState(): ThreadStateRow[] {
+	return stateList.all() as ThreadStateRow[];
 }

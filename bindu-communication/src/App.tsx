@@ -19,6 +19,14 @@ function Shell() {
 	const showCompose = useUI((s) => s.showCompose);
 	const closeCompose = useUI((s) => s.closeCompose);
 	const addLiveEvent = useUI((s) => s.addLiveEvent);
+	const hydrateThreadState = useUI((s) => s.hydrateThreadState);
+
+	// Pull the server-side triage state once on mount. Optimistic local
+	// updates after this point keep their own copy in sync via the
+	// fire-and-forget POST in the mutators.
+	useEffect(() => {
+		void hydrateThreadState();
+	}, [hydrateThreadState]);
 
 	useEffect(() => {
 		function onKey(e: KeyboardEvent) {
