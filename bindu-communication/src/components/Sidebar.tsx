@@ -7,6 +7,7 @@ import {
 	PaperPlaneTiltIcon,
 	PencilSimpleIcon,
 	GearIcon,
+	ArchiveIcon,
 } from "@phosphor-icons/react";
 import { useUI } from "~/state";
 import { shortDid } from "~/lib/format";
@@ -46,6 +47,7 @@ function useEcosystem() {
 const FOLDERS = [
 	{ to: "/inbox", label: "Inbox", icon: TrayIcon },
 	{ to: "/sent", label: "Sent", icon: PaperPlaneTiltIcon },
+	{ to: "/archive", label: "Archive", icon: ArchiveIcon },
 ] as const;
 
 export function Sidebar() {

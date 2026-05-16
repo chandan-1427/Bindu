@@ -58,7 +58,7 @@ export function groupByThread(events: StreamEvent[]): Thread[] {
  *   counterparty DID so they still group sensibly (one thread per
  *   correspondent / per gateway session).
  */
-function extractContextId(e: StreamEvent): string | null {
+export function extractContextId(e: StreamEvent): string | null {
 	if (e.payload) {
 		try {
 			const p = JSON.parse(e.payload) as { context_id?: string };

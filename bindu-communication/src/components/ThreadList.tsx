@@ -1,5 +1,7 @@
 import clsx from "clsx";
 import {
+	ArchiveIcon,
+	ArrowArcLeftIcon,
 	ArrowBendUpLeftIcon,
 	EnvelopeOpenIcon,
 	EnvelopeSimpleIcon,
@@ -15,6 +17,7 @@ import type { StreamEvent } from "~/types";
 
 interface Props {
 	events: StreamEvent[];
+	mode?: "inbox" | "sent" | "archive";
 }
 
 const OUTBOX_AGENT_ID = "outbox";
@@ -29,13 +32,15 @@ const OUTBOX_AGENT_ID = "outbox";
  * attentionCount > 0. Overrides persist to localStorage so the user's
  * triage state survives refreshes.
  */
-export function ThreadList({ events }: Props) {
+export function ThreadList({ events, mode = "inbox" }: Props) {
 	const selectThread = useUI((s) => s.selectThread);
 	const selectEvent = useUI((s) => s.selectEvent);
 	const readOverrides = useUI((s) => s.readOverrides);
 	const unreadOverrides = useUI((s) => s.unreadOverrides);
 	const markRead = useUI((s) => s.markRead);
 	const markUnread = useUI((s) => s.markUnread);
+	const archiveThread = useUI((s) => s.archiveThread);
+	const unarchiveThread = useUI((s) => s.unarchiveThread);
 	const threads = groupByThread(events);
 
 	function isUnread(t: Thread): boolean {
@@ -70,9 +75,12 @@ export function ThreadList({ events }: Props) {
 					key={t.contextId}
 					thread={t}
 					unread={isUnread(t)}
+					mode={mode}
 					onOpen={open}
 					onMarkRead={() => markRead(t.contextId)}
 					onMarkUnread={() => markUnread(t.contextId)}
+					onArchive={() => archiveThread(t.contextId)}
+					onUnarchive={() => unarchiveThread(t.contextId)}
 				/>
 			))}
 		</div>
@@ -82,15 +90,21 @@ export function ThreadList({ events }: Props) {
 function ThreadRow({
 	thread,
 	unread,
+	mode,
 	onOpen,
 	onMarkRead,
 	onMarkUnread,
+	onArchive,
+	onUnarchive,
 }: {
 	thread: Thread;
 	unread: boolean;
+	mode: "inbox" | "sent" | "archive";
 	onOpen: (t: Thread) => void;
 	onMarkRead: () => void;
 	onMarkUnread: () => void;
+	onArchive: () => void;
+	onUnarchive: () => void;
 }) {
 	const e = thread.latest;
 	const isUnread = unread;
@@ -154,23 +168,50 @@ function ThreadRow({
 					<span className="ml-auto shrink-0 text-[11px] text-fg-dim">
 						{e.relTs}
 					</span>
-					{/* Hover action — mark read/unread */}
-					<button
-						type="button"
-						onClick={(ev) => {
-							ev.stopPropagation();
-							if (isUnread) onMarkRead();
-							else onMarkUnread();
-						}}
-						title={isUnread ? "Mark as read" : "Mark as unread"}
-						className="shrink-0 rounded p-1 text-fg-dim opacity-0 transition group-hover:opacity-100 hover:bg-slate-100 hover:text-[--color-cobalt]"
-					>
-						{isUnread ? (
-							<EnvelopeOpenIcon size={13} weight="bold" />
+					{/* Hover actions — read/unread + archive/restore */}
+					<div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+						<button
+							type="button"
+							onClick={(ev) => {
+								ev.stopPropagation();
+								if (isUnread) onMarkRead();
+								else onMarkUnread();
+							}}
+							title={isUnread ? "Mark as read" : "Mark as unread"}
+							className="rounded p-1 text-fg-dim hover:bg-slate-100 hover:text-[--color-cobalt]"
+						>
+							{isUnread ? (
+								<EnvelopeOpenIcon size={13} weight="bold" />
+							) : (
+								<EnvelopeSimpleIcon size={13} weight="bold" />
+							)}
+						</button>
+						{mode === "archive" ? (
+							<button
+								type="button"
+								onClick={(ev) => {
+									ev.stopPropagation();
+									onUnarchive();
+								}}
+								title="Restore to inbox"
+								className="rounded p-1 text-fg-dim hover:bg-slate-100 hover:text-[--color-cobalt]"
+							>
+								<ArrowArcLeftIcon size={13} weight="bold" />
+							</button>
 						) : (
-							<EnvelopeSimpleIcon size={13} weight="bold" />
+							<button
+								type="button"
+								onClick={(ev) => {
+									ev.stopPropagation();
+									onArchive();
+								}}
+								title="Archive"
+								className="rounded p-1 text-fg-dim hover:bg-slate-100 hover:text-[--color-cobalt]"
+							>
+								<ArchiveIcon size={13} weight="bold" />
+							</button>
 						)}
-					</button>
+					</div>
 				</div>
 				<div className="mt-0.5 truncate text-[12px]">
 					<span

@@ -10,10 +10,11 @@ import {
 import { events as mockEvents } from "~/data/mock";
 import { useUI } from "~/state";
 import { shortDid } from "~/lib/format";
+import { extractContextId } from "~/lib/threads";
 import { ThreadList } from "./ThreadList";
 import { ThreadView } from "./ThreadView";
 
-type Folder = "inbox" | "sent";
+type Folder = "inbox" | "sent" | "archive";
 type Mode = { kind: "folder"; folder: Folder } | { kind: "agent"; agentId: string };
 
 const OUTBOX_AGENT_ID = "outbox";
@@ -22,6 +23,7 @@ function useMode(): Mode {
 	const loc = useLocation();
 	const params = useParams<{ agentId: string }>();
 	if (loc.pathname === "/sent") return { kind: "folder", folder: "sent" };
+	if (loc.pathname === "/archive") return { kind: "folder", folder: "archive" };
 	if (loc.pathname === "/inbox" || loc.pathname === "/")
 		return { kind: "folder", folder: "inbox" };
 	return { kind: "agent", agentId: params.agentId ?? "writer" };
@@ -36,6 +38,7 @@ export function StreamPanel() {
 	const selectedThreadId = useUI((s) => s.selectedThreadId);
 	const selectThread = useUI((s) => s.selectThread);
 	const openCompose = useUI((s) => s.openCompose);
+	const archivedThreads = useUI((s) => s.archivedThreads);
 
 	// Clear the open thread when the user switches folder / agent — a
 	// context_id belongs to one selection, not another's.
@@ -46,27 +49,38 @@ export function StreamPanel() {
 
 	const filteredEvents = useMemo(() => {
 		const all = [...liveEvents, ...mockEvents];
+		const isArchived = (e: (typeof all)[number]) => {
+			const ctx = extractContextId(e);
+			return ctx ? archivedThreads.has(ctx) : false;
+		};
 		if (mode.kind === "agent") {
 			return all.filter((e) => e.agentId === mode.agentId);
 		}
-		if (mode.folder === "sent") {
-			return all.filter((e) => e.agentId === OUTBOX_AGENT_ID);
+		if (mode.folder === "archive") {
+			return all.filter(isArchived);
 		}
-		// inbox = everything except outbound originated locally
-		return all.filter((e) => e.agentId !== OUTBOX_AGENT_ID);
-	}, [mode, liveEvents]);
+		if (mode.folder === "sent") {
+			return all.filter((e) => e.agentId === OUTBOX_AGENT_ID && !isArchived(e));
+		}
+		// inbox = everything except outbound + not archived
+		return all.filter((e) => e.agentId !== OUTBOX_AGENT_ID && !isArchived(e));
+	}, [mode, liveEvents, archivedThreads]);
 
 	const title =
 		mode.kind === "folder"
 			? mode.folder === "sent"
 				? "Sent"
-				: "Inbox"
+				: mode.folder === "archive"
+					? "Archive"
+					: "Inbox"
 			: agents.find((a) => a.id === mode.agentId)?.name ?? mode.agentId;
 	const subtitle =
 		mode.kind === "folder"
 			? mode.folder === "sent"
 				? "Conversations you initiated"
-				: "Conversations from your ecosystem"
+				: mode.folder === "archive"
+					? "Threads you set aside"
+					: "Conversations from your ecosystem"
 			: shortDid(agents.find((a) => a.id === mode.agentId)?.did ?? "");
 
 	return (
@@ -128,7 +142,10 @@ export function StreamPanel() {
 					)}
 				>
 					<div className="scrollbar flex-1 overflow-y-auto">
-						<ThreadList events={filteredEvents} />
+						<ThreadList
+							events={filteredEvents}
+							mode={mode.kind === "folder" ? mode.folder : "inbox"}
+						/>
 					</div>
 				</div>
 				{selectedThreadId && (

@@ -70,6 +70,7 @@ export default function App() {
 				<Route path="/" element={<Navigate to="/inbox" replace />} />
 				<Route path="/inbox" element={<Shell />} />
 				<Route path="/sent" element={<Shell />} />
+				<Route path="/archive" element={<Shell />} />
 				<Route path="/agents/:agentId" element={<Shell />} />
 			</Routes>
 		</BrowserRouter>
