@@ -4,7 +4,6 @@ import { z } from "zod"
 import { Service as SessionService, type MessageWithParts } from "../session"
 import { Service as SessionPromptService } from "../session/prompt"
 import { Service as SessionCompactionService } from "../session/compaction"
-import { Service as DBService } from "../db"
 import { Service as BusService } from "../bus"
 import { Service as BinduClientService } from "../bindu/client"
 import { Service as AgentService } from "../agent"
@@ -13,7 +12,7 @@ import { buildLoadRecipeTool } from "../tool/recipe"
 import type { Def } from "../tool/tool"
 import type { PeerDescriptor } from "../bindu/client"
 import type { PeerAuth } from "../bindu/auth/resolver"
-import type { SessionID } from "../session/schema"
+import { newMessageID, type SessionID } from "../session/schema"
 import { buildSkillTool } from "./skill-tool"
 
 /**
@@ -143,6 +142,19 @@ export const DEFAULT_PLAN_DEADLINE_MS = 30 * 60 * 1000
  *  programmatically. */
 export const MAX_PLAN_DEADLINE_MS = 6 * 60 * 60 * 1000
 
+/** History turn shape — what the client sends on each /plan call so
+ * the gateway doesn't need its own session DB. Mirrors the planner's
+ * internal MessageWithParts shape, minus the metadata bookkeeping. */
+const HistoryPart = z.object({
+  type: z.literal("text"),
+  text: z.string(),
+})
+const HistoryTurn = z.object({
+  role: z.enum(["user", "assistant"]),
+  parts: z.array(HistoryPart).min(1),
+})
+export type HistoryTurn = z.infer<typeof HistoryTurn>
+
 export const PlanRequest = z.object({
   // Non-empty — Anthropic (and some other providers) reject an empty
   // user message with a 400 mid-stream, which surfaces to the caller
@@ -152,6 +164,16 @@ export const PlanRequest = z.object({
   agents: z.array(AgentRequest).default([]),
   preferences: PlanPreferences.optional(),
   session_id: z.string().optional(),
+  /** Path A — client-owned history. When provided, the gateway runs
+   * stateless for this call: prior turns come from the request body
+   * rather than a session DB lookup. Last N turns from the caller's
+   * record; older context survives via `prior_summary`. */
+  history: z.array(HistoryTurn).optional(),
+  /** Compaction summary the gateway emitted on a prior call to this
+   * session, persisted by the client. Prepended to the prompt as a
+   * synthetic user turn so the planner can still reference earlier
+   * conversation that was compacted away. */
+  prior_summary: z.string().optional(),
 })
 export type PlanRequest = z.infer<typeof PlanRequest>
 
@@ -174,6 +196,9 @@ export interface SessionContext {
 
 export interface RunPlanOutcome {
   message: MessageWithParts
+  /** Empty in stateless mode (Path A) — the per-task audit lives on
+   * the client now, written from the SSE `task.*` frames. Kept on the
+   * outcome shape so callers that destructured it don't break. */
   tasksRecorded: string[]
 }
 
@@ -206,7 +231,6 @@ export const layer = Layer.effect(
     const sessions = yield* SessionService
     const prompt = yield* SessionPromptService
     const compaction = yield* SessionCompactionService
-    const db = yield* DBService
     const bus = yield* BusService
     const client = yield* BinduClientService
     const agents = yield* AgentService
@@ -239,26 +263,89 @@ export const layer = Layer.effect(
 
     const prepareSession: Interface["prepareSession"] = (request) =>
       Effect.gen(function* () {
-        const existing = request.session_id
-          ? yield* db.getSession({ externalId: request.session_id })
-          : undefined
+        // Path A — client-owned history. When the caller ships
+        // `history` (and optionally `prior_summary`) on the request,
+        // the gateway is stateless for this call: we mint a fresh
+        // session row per request and seed it with the supplied turns
+        // rather than resuming the prior on-disk session. The DB row
+        // is effectively per-call scratch space; Stage 5 of the
+        // stateless migration will delete the DB layer entirely.
+        if (request.history !== undefined) {
+          const sessionRow = yield* sessions.create({
+            externalSessionID: request.session_id,
+            agentCatalog: request.agents,
+          })
+          const sessionID = sessionRow.id as unknown as SessionID
 
-        const sessionRow = existing
-          ? existing
-          : yield* sessions.create({
-              externalSessionID: request.session_id,
-              agentCatalog: request.agents,
+          // Prepend the client-persisted compaction summary as a
+          // synthetic user turn. Mirrors how session.history() injects
+          // its own summary today — same prompt format, same role
+          // ("user" not "system" so we don't clobber the planner's
+          // system block).
+          if (request.prior_summary && request.prior_summary.trim()) {
+            yield* sessions.appendUser({
+              sessionID,
+              parts: [
+                {
+                  id: newMessageID() as unknown as import("../session/schema").PartID,
+                  type: "text",
+                  text:
+                    "[Prior session context, compacted]\n\n" +
+                    request.prior_summary,
+                  synthetic: true,
+                  time: { start: Date.now() },
+                },
+              ],
             })
-        const sessionID = sessionRow.id as unknown as SessionID
+          }
 
-        if (existing) {
-          yield* db.updateSessionCatalog(sessionID, request.agents)
+          // Seed the provided turns. Bulk-insertion goes through the
+          // same appendUser/appendAssistant code path as live writes,
+          // so any future bus/audit hooks fire consistently. Order
+          // matters — caller sends oldest → newest.
+          for (const turn of request.history) {
+            const parts = turn.parts.map((p) => ({
+              id: newMessageID() as unknown as import("../session/schema").PartID,
+              type: "text" as const,
+              text: p.text,
+              time: { start: Date.now() },
+            }))
+            if (turn.role === "user") {
+              yield* sessions.appendUser({ sessionID, parts })
+            } else {
+              yield* sessions.appendAssistant({
+                sessionID,
+                info: {
+                  id: newMessageID(),
+                  sessionID,
+                  role: "assistant",
+                  time: { created: Date.now() },
+                },
+                parts,
+              })
+            }
+          }
+
+          return {
+            sessionID,
+            externalSessionID: sessionRow.external_session_id,
+            existing: false,
+          }
         }
 
+        // Stateless fallback — when the caller doesn't ship `history`,
+        // we mint a fresh empty session for this call. There's no
+        // resumption: `session_id` becomes a correlation tag only, not
+        // a key into a durable store. The previous `db.getSession()`
+        // path was deleted with the DB layer.
+        const sessionRow = yield* sessions.create({
+          externalSessionID: request.session_id,
+          agentCatalog: request.agents,
+        })
         return {
-          sessionID,
+          sessionID: sessionRow.id as unknown as SessionID,
           externalSessionID: sessionRow.external_session_id,
-          existing: !!existing,
+          existing: false,
         }
       })
 
@@ -305,7 +392,6 @@ export const layer = Layer.effect(
             )
 
           const contextId = ctx.sessionID
-          const tasksRecorded: string[] = []
           const tools: Def[] = []
 
           for (const ag of request.agents) {
@@ -316,7 +402,7 @@ export const layer = Layer.effect(
               trust: ag.trust,
             }
             for (const sk of ag.skills) {
-              tools.push(buildSkillTool(peer, sk, { client, db, contextId, tasksRecorded }))
+              tools.push(buildSkillTool(peer, sk, { client, contextId }))
             }
           }
 
@@ -358,7 +444,7 @@ export const layer = Layer.effect(
             }),
           )
 
-          return { message, tasksRecorded }
+          return { message, tasksRecorded: [] }
         } finally {
           deadline.cleanup()
         }

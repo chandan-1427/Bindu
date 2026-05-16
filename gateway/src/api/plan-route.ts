@@ -12,6 +12,7 @@ import {
 import { Service as BusService, type Interface as BusInterface } from "../bus"
 import { Service as ConfigService, type Config } from "../config"
 import { PromptEvent } from "../session/prompt"
+import { CompactionEvent } from "../session/compaction"
 import { fetchAgentCard } from "../bindu/client/agent-card"
 import { getPeerDID } from "../bindu/protocol/identity"
 import { z } from "zod"
@@ -266,6 +267,26 @@ async function handleRequest(
           session_id: evt.properties.sessionID,
           stop_reason: evt.properties.stopReason,
           usage: evt.properties.usage,
+        }),
+      })
+    })
+
+    // Path A — compaction summary sidechannel. When the planner's
+    // compaction layer summarises an overflowing history, it publishes
+    // CompactionEvent.Summary on the bus. We forward it to the client
+    // here so the client can persist the summary locally and send it
+    // back as `prior_summary` on the next /plan call. That loop is how
+    // a stateless gateway preserves long-running session context across
+    // requests without owning the durable store.
+    spawnReader(ac.signal, ownEvent(bus.subscribe(CompactionEvent.Summary)), async (evt) => {
+      await stream.writeSSE({
+        event: "compaction-summary",
+        data: JSON.stringify({
+          session_id: evt.properties.sessionID,
+          summary: evt.properties.summary,
+          tokens_before: evt.properties.tokensBefore,
+          tokens_after: evt.properties.tokensAfter,
+          messages_compacted: evt.properties.messagesCompactedCount,
         }),
       })
     })

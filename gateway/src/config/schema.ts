@@ -18,15 +18,15 @@ export const GatewayAuthConfig = z.object({
   tokens: z.array(z.string()).default([]),
 })
 
+// Session is now always stateless — the gateway holds per-request
+// in-memory state for the lifetime of a /plan call, then drops it.
+// The `mode` field is kept on the schema for forward-compat (some
+// callers may still send it), but only `"stateless"` is honored;
+// `"stateful"` is rejected at boot. `ttlDays` becomes informational
+// — there's nothing to TTL when there's nothing persisted.
 export const SessionConfig = z.object({
-  mode: z.enum(["stateful", "stateless"]).default("stateful"),
+  mode: z.literal("stateless").default("stateless"),
   ttlDays: z.number().int().positive().default(30),
-})
-
-export const SupabaseConfig = z.object({
-  url: z.string().url(),
-  serviceRoleKey: z.string().min(10),
-  schema: z.string().default("public"),
 })
 
 export const LimitsConfig = z.object({
@@ -38,8 +38,7 @@ export const LimitsConfig = z.object({
 export const GatewayBlock = z.object({
   server: ServerConfig.default({ port: 3774, hostname: "0.0.0.0" }),
   auth: GatewayAuthConfig.default({ mode: "bearer", tokens: [] }),
-  session: SessionConfig.default({ mode: "stateful", ttlDays: 30 }),
-  supabase: SupabaseConfig,
+  session: SessionConfig.default({ mode: "stateless", ttlDays: 30 }),
   limits: LimitsConfig.default({ maxHops: 5, maxConcurrentToolCalls: 3, defaultTaskTimeoutMs: 60_000 }),
 })
 export type GatewayBlock = z.infer<typeof GatewayBlock>

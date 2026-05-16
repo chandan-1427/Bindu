@@ -261,6 +261,10 @@ class PushNotificationManager:
             **extra_context: Additional context to log
         """
         if isinstance(exc, NotificationDeliveryError):
+            # HTTP-level delivery failure — the peer is reachable but
+            # returned 4xx/5xx. WARNING is fine here; the status code
+            # itself is the diagnostic signal and a traceback would
+            # just point back into our own retry decorator.
             logger.warning(
                 f"{error_type.capitalize()} notification delivery failed",
                 task_id=str(task_id),
@@ -270,19 +274,46 @@ class PushNotificationManager:
                 **extra_context,
             )
         else:
-            logger.error(
+            # Anything else — serialization bugs, SSRF rejects,
+            # connection failures — is in our code, not the peer's.
+            # Attach the traceback via logger.opt(exception=...) so the
+            # next failure surfaces the call site instead of a one-line
+            # str(). The UUID-in-artifact bug hid here for weeks because
+            # this branch silently produced a single opaque line.
+            logger.opt(exception=exc).error(
                 f"Unexpected error delivering {error_type} notification",
                 task_id=str(task_id),
                 context_id=str(context_id),
                 error=str(exc),
+                error_type=type(exc).__name__,
                 **extra_context,
             )
 
     def build_lifecycle_event(
-        self, task_id: uuid.UUID, context_id: uuid.UUID, state: str, final: bool
+        self,
+        task_id: uuid.UUID,
+        context_id: uuid.UUID,
+        state: str,
+        final: bool,
+        status_message: str | None = None,
     ) -> dict[str, Any]:
-        """Build a lifecycle event payload for push notification."""
+        """Build a lifecycle event payload for push notification.
+
+        When `status_message` is provided, embed it as an A2A-shaped
+        Message inside `status.message`. This is how operator-facing
+        clients (the bindu-comms inbox) learn what the agent is asking
+        in input-required / payment-required / auth-required states —
+        without it, those rows show only "state changed" and the
+        operator has no way to see the prompt.
+        """
         timestamp = datetime.now(timezone.utc).isoformat()
+        status: dict[str, Any] = {"state": state, "timestamp": timestamp}
+        if status_message:
+            status["message"] = {
+                "role": "agent",
+                "kind": "message",
+                "parts": [{"kind": "text", "text": status_message}],
+            }
         return {
             "event_id": str(uuid.uuid4()),
             "sequence": self._next_sequence(task_id),
@@ -290,12 +321,17 @@ class PushNotificationManager:
             "kind": "status-update",
             "task_id": str(task_id),
             "context_id": str(context_id),
-            "status": {"state": state, "timestamp": timestamp},
+            "status": status,
             "final": final,
         }
 
     async def notify_lifecycle(
-        self, task_id: uuid.UUID, context_id: uuid.UUID, state: str, final: bool
+        self,
+        task_id: uuid.UUID,
+        context_id: uuid.UUID,
+        state: str,
+        final: bool,
+        status_message: str | None = None,
     ) -> None:
         """Send a lifecycle notification for a task.
 
@@ -306,7 +342,9 @@ class PushNotificationManager:
         config = self.get_effective_webhook_config(task_id)
         if not config:
             return
-        event = self.build_lifecycle_event(task_id, context_id, state, final)
+        event = self.build_lifecycle_event(
+            task_id, context_id, state, final, status_message
+        )
         try:
             await self.notification_service.send_event(config, event)
         except Exception as exc:

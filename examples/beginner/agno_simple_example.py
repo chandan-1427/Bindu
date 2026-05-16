@@ -45,6 +45,11 @@ config = {
         "expose": True,
         "cors_origins": ["http://localhost:5173"]
     },
+    "capabilities": {"push_notifications": True},
+    "global_webhook_url": os.getenv(
+        "BINDU_COMMS_URL",
+        "http://127.0.0.1:3787/webhooks/bindu/agno-simple",
+    ),
     "skills": ["skills/question-answering", "skills/pdf-processing"]
 }
 

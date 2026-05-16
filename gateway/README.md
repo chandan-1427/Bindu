@@ -5,7 +5,7 @@ A task-first orchestrator that sits between an **external system** and one or mo
 - **One endpoint:** `POST /plan`
 - **Planner = LLM:** no DAG engine, no separate orchestrator service. The planner agent's LLM decomposes the question and picks tools per turn.
 - **Agent catalog per request:** external system provides the list of agents + skills + endpoints. No fleet hosting here.
-- **Sessions persist in Supabase:** Postgres-backed with compaction + revert + multi-turn history.
+- **Stateless:** the gateway holds session state in memory for the lifetime of each `/plan` call only. The calling client owns durability — passes prior turns via `history` and the latest compaction summary via `prior_summary` on each call. Compaction summaries flow back to the client mid-stream as `event: compaction-summary`.
 - **Native TS A2A:** no Python subprocess, no `@bindu/sdk` dependency.
 
 ## New here?
@@ -21,11 +21,11 @@ This README is the **operator's reference** — configuration, troubleshooting, 
 ```bash
 cd gateway
 npm install
-cp .env.example .env.local    # fill in SUPABASE_*, GATEWAY_API_KEY, OPENROUTER_API_KEY
+cp .env.example .env.local    # fill in GATEWAY_API_KEY, OPENROUTER_API_KEY
 npm run dev
 ```
 
-Apply the two Supabase migrations first (`migrations/001_init.sql`, `migrations/002_compaction_revert.sql`). Full environment list below.
+No database to provision — the gateway is **stateless**. Session state lives in memory for the duration of each `/plan` call; the calling client owns durable history. Pass prior turns in the `history` request field; persist the `compaction-summary` SSE frames the planner emits and ship them back as `prior_summary` on the next call. Full environment list below.
 
 Health check:
 
@@ -40,7 +40,7 @@ Returns a detailed JSON payload describing the gateway process — version, plan
   "version": "0.1.0",
   "health": "healthy",
   "runtime": {
-    "storage_backend": "Supabase",
+    "storage_backend": "stateless",
     "bus_backend": "EffectPubSub",
     "planner": {
       "model": "openrouter/anthropic/claude-sonnet-4.6",
@@ -56,7 +56,7 @@ Returns a detailed JSON payload describing the gateway process — version, plan
   },
   "application": {
     "name": "@bindu/gateway",
-    "session_mode": "stateful",
+    "session_mode": "stateless",
     "gateway_did": "did:bindu:ops_at_example_com:gateway:47191e40-3e91-2ef4-d001-b8d005680279",
     "gateway_id": "47191e40-3e91-2ef4-d001-b8d005680279",
     "author": "ops_at_example_com"
@@ -83,10 +83,10 @@ For a runnable multi-agent walkthrough, see [`docs/GATEWAY.md`](../docs/GATEWAY.
 
 | Variable | Purpose |
 |---|---|
-| `SUPABASE_URL` | Session store — Postgres project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (treat as secret) |
 | `GATEWAY_API_KEY` | Bearer token that callers must send |
 | `OPENROUTER_API_KEY` | Planner LLM provider |
+
+The gateway used to require `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` for session storage. Those are no longer used — sessions live in-memory, the calling client owns durable history.
 
 ### Optional environment variables
 
@@ -246,7 +246,6 @@ gateway/
 ├── vitest.config.ts          # test config (loads .env.local)
 ├── docs/
 │   └── STORY.md              # end-to-end walkthrough — the primary read
-├── migrations/               # Supabase SQL
 ├── agents/                   # markdown+YAML agent configs
 │   └── planner.md            # the default planner system prompt
 ├── recipes/                  # markdown playbooks (progressive disclosure)
@@ -254,7 +253,6 @@ gateway/
 │   ├── _shared/, effect/, util/, id/, global/    # vendored from OpenCode
 │   ├── bus/                  # typed event bus
 │   ├── config/               # hierarchical config loader
-│   ├── db/                   # Supabase adapter
 │   ├── auth/                 # credential keystore
 │   ├── permission/           # wildcard ruleset evaluator
 │   ├── provider/             # AI SDK handle lookup (OpenRouter)

@@ -1,0 +1,12 @@
+Bindu Communications
+Copyright 2026 Bindu
+
+This product includes design and layout patterns inspired by
+Cloudflare Agentic Inbox (https://github.com/cloudflare/agentic-inbox),
+Copyright 2026 Cloudflare, Inc., licensed under the Apache License, Version 2.0.
+
+No source code from cloudflare/agentic-inbox is included verbatim;
+the visual aesthetic (three-pane layout, neutral palette, density,
+agent-side-panel pattern) was studied and reproduced independently
+with vanilla Tailwind. This NOTICE is preserved as a courtesy to
+acknowledge the conceptual debt.

@@ -5,19 +5,18 @@ import { Hono } from "hono"
 import * as Config from "./config"
 import * as Bus from "./bus"
 import * as Auth from "./auth"
-import * as DB from "./db"
 import * as Permission from "./permission"
 import * as Provider from "./provider"
 import * as Recipe from "./recipe"
 import * as Agent from "./agent"
 import * as Session from "./session"
 import * as SessionCompaction from "./session/compaction"
-import * as SessionRevert from "./session/revert"
 import * as SessionPrompt from "./session/prompt"
 import * as ToolRegistry from "./tool/registry"
 import * as BinduClient from "./bindu/client"
 import * as Server from "./server"
 import * as Planner from "./planner"
+import { forwarderEffect } from "./comms-forwarder"
 import { buildPlanHandler } from "./api/plan-route"
 import { buildHealthHandler } from "./api/health-route"
 import { buildDidHandler } from "./api/did-route"
@@ -69,19 +68,19 @@ function buildAppLayer(
   )
 
   // Level 2 — need Config (implicitly resolved by provideMerge)
+  // Path A: the DB layer is gone. Session state lives in memory for the
+  // duration of each /plan call; durable record is on the client.
   const level2 = Layer.mergeAll(
-    DB.layer,
     Provider.layer,
     Agent.layer(),
     Server.layer,
   ).pipe(Layer.provideMerge(level1))
 
-  // Level 3 — Session needs DB; Revert needs DB
-  const level3 = Layer.mergeAll(Session.layer, SessionRevert.layer).pipe(
-    Layer.provideMerge(level2),
-  )
+  // Level 3 — Session is in-memory (no DB dep). Revert is gone (it was
+  // a DB-flag flip; the client controls history now).
+  const level3 = Session.layer.pipe(Layer.provideMerge(level2))
 
-  // Level 4 — Compaction needs Session + DB + Provider
+  // Level 4 — Compaction needs Session + Provider + Bus
   const level4 = SessionCompaction.layer.pipe(Layer.provideMerge(level3))
 
   // Level 5 — Prompt needs Session, Agent, Config, Registry, Bus, Provider, Permission
@@ -135,6 +134,28 @@ export function tryLoadIdentity(): LocalIdentity | undefined {
 const DEFAULT_SCOPES = ["openid", "offline", "agent:read", "agent:write"]
 
 /**
+ * Probe the configured Hydra admin URL with a short timeout.
+ *
+ * Returns `true` if any HTTP response comes back (200, 401, 404, 5xx
+ * — anything reachable counts as "TCP + TLS handshake worked, Hydra
+ * is alive enough to answer"). Returns `false` on network-level
+ * failures: TLS alerts, ECONNREFUSED, DNS errors, timeouts.
+ *
+ * Used by `setupHydraIntegration` to choose between full registration
+ * and a degraded boot — see that function's contract.
+ */
+async function probeHydraAdmin(adminUrl: string, timeoutMs = 3000): Promise<boolean> {
+  try {
+    const res = await fetch(`${adminUrl.replace(/\/+$/, "")}/health/alive`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    return res.status > 0
+  } catch {
+    return false
+  }
+}
+
+/**
  * Auto-register the gateway with Hydra (if configured) and spin
  * up a TokenProvider for outbound did_signed peer calls.
  *
@@ -149,16 +170,19 @@ const DEFAULT_SCOPES = ["openid", "offline", "agent:read", "agent:write"]
  *       BINDU_GATEWAY_HYDRA_SCOPE       (space-separated; default:
  *                                        "openid offline agent:read agent:write")
  *
- *   * If BOTH URLs are set: registers with Hydra (idempotent) and
- *     returns a TokenProvider.
- *   * If NEITHER is set: returns undefined. did_signed peers must
- *     then carry a tokenEnvVar or fail at call time.
+ *   * If BOTH URLs are set AND admin is reachable: registers with
+ *     Hydra (idempotent) and returns a TokenProvider.
+ *   * If BOTH URLs are set but admin is unreachable at boot: logs a
+ *     warning and returns undefined (degraded mode). `did_signed`
+ *     peers will fail at call time, but the gateway boots and other
+ *     auth modes still work. Previously this was a hard boot failure;
+ *     blocking startup on a flaky remote turned out to be worse than
+ *     reduced capability — operators can fix Hydra later without
+ *     restarting comms or having no gateway at all.
+ *   * If NEITHER URL is set: returns undefined. `did_signed` peers
+ *     must then carry a `tokenEnvVar` or fail at call time.
  *   * If only one is set: throws a clear error. Partial config is
  *     the worst of all worlds.
- *
- * Blocks boot until registration completes — if the admin API is
- * unreachable at boot, we want to fail fast rather than discover
- * the problem on the first peer call.
  */
 export async function setupHydraIntegration(
   identity: LocalIdentity,
@@ -175,6 +199,23 @@ export async function setupHydraIntegration(
         "BINDU_GATEWAY_HYDRA_ADMIN_URL, BINDU_GATEWAY_HYDRA_TOKEN_URL. " +
         `Got: admin=${adminUrl ? "set" : "missing"}, token=${tokenUrl ? "set" : "missing"}`,
     )
+  }
+
+  // Pre-flight: confirm Hydra is reachable before we commit to the
+  // 30-second `ensureHydraClient` round-trip. Some `.env.local` files
+  // point at a remote Hydra that's only available from inside a VPN
+  // (or has gone away entirely). When that happens we'd previously
+  // explode mid-boot with a TLS alert; now we log the situation and
+  // boot in degraded mode so the operator can still run plans
+  // against `auth:{type:"none"}` and `bearer` peers.
+  const reachable = await probeHydraAdmin(adminUrl)
+  if (!reachable) {
+    console.warn(
+      `[bindu-gateway] Hydra admin URL ${adminUrl} is unreachable — booting without ` +
+        `Hydra integration. did_signed peers will fail at call time until ` +
+        `the URL is reachable or unset.`,
+    )
+    return undefined
   }
 
   const scope = scopeStr ? scopeStr.split(/\s+/).filter(Boolean) : DEFAULT_SCOPES
@@ -231,6 +272,8 @@ export async function main(): Promise<{ close: () => Promise<void> }> {
   }
 
   const runtime = ManagedRuntime.make(buildAppLayer(identity, tokenProvider))
+
+  runtime.runFork(forwarderEffect)
 
   const cfg = await runtime.runPromise(
     Effect.gen(function* () {

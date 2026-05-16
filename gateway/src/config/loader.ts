@@ -107,14 +107,10 @@ function envOverrides(base: Record<string, any>): Record<string, any> {
     out.gateway.auth = out.gateway.auth ?? {}
     out.gateway.auth.tokens = [process.env.GATEWAY_API_KEY]
   }
-  if (process.env.SUPABASE_URL || process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    out.gateway.supabase = {
-      url: process.env.SUPABASE_URL ?? out.gateway.supabase?.url,
-      serviceRoleKey:
-        process.env.SUPABASE_SERVICE_ROLE_KEY ?? out.gateway.supabase?.serviceRoleKey,
-      schema: out.gateway.supabase?.schema ?? "public",
-    }
-  }
+  // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env hooks removed — the
+  // gateway no longer has a persistent store. Setting them in your
+  // .env.local is harmless (they're ignored), but they no longer wire
+  // anything. Stateless gateway, see config/schema.ts §SessionConfig.
 
   // OpenRouter is the single supported LLM provider — see
   // src/provider/index.ts for the rationale. The env hook wires

@@ -15,9 +15,14 @@ import {
 
 /**
  * Tool factory: one `Def` per (peer, skill) pair. The returned Def speaks
- * the Bindu protocol via `deps.client`, records an audit row through
- * `deps.db`, and wraps the response in a `<remote_content>` envelope so
- * the planner LLM treats it as untrusted.
+ * the Bindu protocol via `deps.client` and wraps the response in a
+ * `<remote_content>` envelope so the planner LLM treats it as untrusted.
+ *
+ * Path A (stateless gateway): the per-task audit ledger used to live in
+ * Supabase `gateway_tasks`. That table is gone — the client (comms)
+ * now persists `task.started` / `task.artifact` / `task.finished` SSE
+ * frames into its own events log, so the audit trail follows the
+ * canonical record (which is also where the operator looks for it).
  */
 
 export interface BuildToolDeps {
@@ -26,12 +31,7 @@ export interface BuildToolDeps {
       input: import("../bindu/client").CallPeerInput,
     ) => Effect.Effect<import("../bindu/client").CallPeerOutcome, import("../bindu/protocol/jsonrpc").BinduError>
   }
-  db: {
-    recordTask: (input: import("../db").RecordTaskInput) => Effect.Effect<import("../db").TaskRow, Error>
-    finishTask: (input: import("../db").FinishTaskInput) => Effect.Effect<void, Error>
-  }
   contextId: string
-  tasksRecorded: string[]
 }
 
 export function buildSkillTool(
@@ -67,22 +67,19 @@ export function buildSkillTool(
     parameters,
     execute: (args: unknown, ctx: ToolContext) =>
       Effect.gen(function* () {
-        // 1. Record the task in our audit DB up-front
-        const taskRow = yield* deps.db.recordTask({
-          sessionId: ctx.sessionId as unknown as string,
-          agentName: peer.name,
-          skillId: skill.id,
-          endpointUrl: peer.url,
-          input: args,
-          state: "submitted",
-        })
-        deps.tasksRecorded.push(taskRow.id)
-
-        // 2. Execute via the Bindu client.
+        // 1. Execute via the Bindu client.
         // If the tool's args are just ``{input: "..."}`` (the default-
         // schema shape), unwrap to plain text so the peer sees a
         // normal user message. Structured skills with richer schemas
         // get JSON-serialized as before.
+        //
+        // Audit: previously we wrote a `gateway_tasks` row before and
+        // after the call. The Supabase layer is gone (Path A); the
+        // PromptEvent.ToolCallStart / .ToolCallEnd bus events still
+        // fire (see SessionPrompt), and the SSE bridge forwards them
+        // as `task.started` / `task.artifact` / `task.finished` frames
+        // which the client persists. The audit trail moved, it didn't
+        // disappear.
         const peerInput = extractPlainTextInput(args)
         const outcome = yield* deps.client
           .callPeer({
@@ -92,53 +89,17 @@ export function buildSkillTool(
             contextId: deps.contextId,
             signal: ctx.abort,
           })
-          .pipe(
-            Effect.tapError((err) =>
-              deps.db.finishTask({
-                id: taskRow.id,
-                state: "failed",
-                outputText: `BinduError ${err.code}: ${err.message}`,
-              }),
-            ),
-            Effect.mapError((err) => err as unknown as Error),
-          )
+          .pipe(Effect.mapError((err) => err as unknown as Error))
 
-        // 3. Finish the audit row
         const remoteContextId = outcome.task.contextId
-        // outcome.task.id is the peer-assigned task id. Record it so the
-        // `remote_task_id` column (and its index) are usable for debugging
-        // and cross-system correlation — the gateway's internal row id
-        // (taskRow.id) is never seen by the peer.
-        const remoteTaskId = outcome.task.id
-
-        // Record the ACTUAL state the remote reported. Previously this
-        // fell back to "completed" for every non-terminal state, which
-        // hid input-required / payment-required / auth-required /
-        // trust-verification-required / working in the audit log —
-        // operators investigating a stuck plan couldn't tell why a
-        // task paused. See
-        // https://docs.getbindu.com/bindu/concepts/task-first-and-architecture
-        // for the full state list. Terminal states pass through; non-
-        // terminal states are preserved so downstream tools (analytics,
-        // dashboards) can reason about them.
-        const finalState = outcome.task.status.state as any
+        // outcome.task.id is the peer-assigned task id — kept on the
+        // `metadata` block below so it surfaces through the SSE frame
+        // and reaches the client's audit log under the same key it
+        // used to live under in `gateway_tasks.remote_task_id`.
 
         const outputText = extractOutputText(outcome.task)
 
-        yield* deps.db.finishTask({
-          id: taskRow.id,
-          state: finalState,
-          outputText,
-          remoteContextId,
-          remoteTaskId,
-          usage: {
-            polls: outcome.polls,
-            terminal: outcome.terminal,
-            signatures: outcome.signatures ?? undefined,
-          },
-        })
-
-        // 4. Wrap the output in an untrusted-content envelope for the planner.
+        // 2. Wrap the output in an untrusted-content envelope for the planner.
         //    The `verified` attribute is four-valued (yes/no/unsigned/unknown)
         //    so the planner LLM can distinguish a cryptographic pass from
         //    "no signatures existed to check" — the latter used to appear

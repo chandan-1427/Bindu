@@ -1,8 +1,10 @@
 import { Context, Effect, Layer } from "effect"
 import type { LanguageModel } from "ai"
-import { Service as DBService } from "../db"
+import { z } from "zod"
 import { Service as ProviderService } from "../provider"
-import { Service as SessionService } from "./index"
+import { Service as BusService } from "../bus"
+import { BusEvent } from "../bus/bus-event"
+import { Service as SessionService, type Interface as SessionInterface } from "./index"
 import {
   estimateHistoryTokens,
   isOverflow,
@@ -10,8 +12,34 @@ import {
   type OverflowThreshold,
 } from "./overflow"
 import { summarize } from "./summary"
-import type { SessionID } from "./schema"
+import type { MessageID, SessionID } from "./schema"
 import type { MessageWithParts } from "./message"
+
+/**
+ * Compaction-summary bus event.
+ *
+ * Path A (stateless gateway): instead of (only) writing the new summary
+ * to the session row, we publish it on the bus so the /plan SSE bridge
+ * can ship it to the client as `event: compaction-summary`. The client
+ * persists it locally and sends it back as `prior_summary` on the next
+ * /plan call. That's how a stateless gateway preserves long-session
+ * context across requests.
+ *
+ * The DB write still happens during the migration so legacy callers
+ * (Path B) keep working; Stage 5 removes the DB side.
+ */
+export const CompactionEvent = {
+  Summary: BusEvent.define(
+    "session.compaction.summary",
+    z.object({
+      sessionID: z.string(),
+      summary: z.string(),
+      tokensBefore: z.number().optional(),
+      tokensAfter: z.number().optional(),
+      messagesCompactedCount: z.number().int().nonnegative().optional(),
+    }),
+  ),
+}
 
 /**
  * Session compaction service.
@@ -60,9 +88,9 @@ export class Service extends Context.Service<Service, Interface>()("@bindu/Sessi
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const db = yield* DBService
-    const sessions = yield* SessionService
+    const sessions: SessionInterface = yield* SessionService
     const provider = yield* ProviderService
+    const bus = yield* BusService
 
     /**
      * Per-session promise dedupe map.
@@ -151,25 +179,17 @@ export const layer = Layer.effect(
       // this refactor fixes). Instead, pull the summary text out as
       // `priorSummary` and feed it to the summarizer explicitly with
       // facts-preservation instructions.
-      const client = db.client()
       const before = estimateHistoryTokens(history)
 
       const realHistory = history.filter((m) => !isSynthetic(m))
       const { head, tail } = splitHead(realHistory, keepTail)
 
-      // Read prior summary directly from the session row so we don't depend
-      // on history()'s synthetic-injection contract (keeps this path
-      // correct even if the caller passed history from a different source).
-      const { data: sessData, error: sessReadErr } = await client
-        .from("gateway_sessions")
-        .select("compaction_summary")
-        .eq("id", sessionID)
-        .maybeSingle()
-      if (sessReadErr) {
-        throw new Error(`compaction: failed to read session: ${sessReadErr.message}`)
-      }
+      // Pull the prior summary through the session service. Was a
+      // direct `db.client().from("gateway_sessions")` query before
+      // the in-memory rewrite; now it's just a Map lookup, but the
+      // contract is unchanged from the caller's perspective.
       const priorSummary =
-        ((sessData as { compaction_summary?: string | null } | null)?.compaction_summary ?? null) || null
+        Effect.runSync(sessions.getSummary(sessionID)) || null
 
       // If there's nothing new to fold in AND no prior summary, we're done.
       if (head.length === 0 && !priorSummary) {
@@ -189,38 +209,46 @@ export const layer = Layer.effect(
         abortSignal,
       })
 
-      // Mark the real head messages as compacted. We filtered synthetic
-      // rows out already, so every id here corresponds to a real row.
+      // Drop the summarised head messages from the in-memory session.
+      // In Supabase we used to flip `compacted=true` and let
+      // history() filter them out; the in-memory store doesn't carry
+      // that column, so `markCompacted` simply removes them from the
+      // active history. The summary preserves their content as a
+      // single synthetic user turn injected at the head on the next
+      // prompt build (see session.history()).
       const headIds = head
         .map((m) => (m.info as { id?: string }).id)
-        .filter((x): x is string => !!x)
+        .filter((x): x is string => !!x) as MessageID[]
       if (headIds.length > 0) {
-        const { error } = await client
-          .from("gateway_messages")
-          .update({ compacted: true })
-          .eq("session_id", sessionID)
-          .in("id", headIds)
-        if (error) {
-          throw new Error(`compaction: failed to mark compacted: ${error.message}`)
-        }
+        Effect.runSync(sessions.markCompacted(sessionID, headIds))
       }
 
-      // Overwrite compaction_summary with the NEW (superset) summary. Because
-      // summarize() was given the priorSummary and instructed to preserve
-      // every fact in it, the new value is safe to replace — it already
-      // carries forward everything the old one did.
-      const { error: sessErr } = await client
-        .from("gateway_sessions")
-        .update({
-          compaction_summary: summary,
-          compaction_at: new Date().toISOString(),
-        })
-        .eq("id", sessionID)
-      if (sessErr) {
-        throw new Error(`compaction: failed to update session: ${sessErr.message}`)
-      }
+      // Overwrite the session's compaction summary with the NEW one.
+      // summarize() was given the priorSummary and instructed to
+      // preserve every fact in it, so the new value is safe to
+      // replace — it already carries forward everything the old one
+      // did.
+      Effect.runSync(sessions.setSummary(sessionID, summary))
 
       const tokensAfter = estimateHistoryTokens(tail) + Math.ceil(summary.length / 4)
+
+      // Path A: publish the new summary on the bus so the /plan SSE
+      // bridge can ship it to the client as `event: compaction-summary`.
+      // The client persists it and sends it back as `prior_summary` on
+      // the next /plan call — that's how the stateless gateway keeps
+      // long-running sessions coherent without owning durability.
+      //
+      // Fire-and-forget: bus is in-process pubsub, runFork hands the
+      // publish off without blocking the compaction return.
+      Effect.runFork(
+        bus.publish(CompactionEvent.Summary, {
+          sessionID,
+          summary,
+          tokensBefore: before,
+          tokensAfter,
+          messagesCompactedCount: head.length,
+        }),
+      )
 
       return {
         compacted: true,

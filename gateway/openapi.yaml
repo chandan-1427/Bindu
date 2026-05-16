@@ -80,6 +80,7 @@ info:
     | `task.started` | Per A2A tool call | The planner decided to call a peer agent. |
     | `task.artifact` | Per A2A tool call | The peer returned an artifact, wrapped in a `<remote_content>` envelope. |
     | `task.finished` | Per A2A tool call | Terminal state of the peer call. |
+    | `compaction-summary` | Zero or one per call (mid-stream) | New compaction summary produced when history overflowed the context window. Client must persist and ship back as `prior_summary` on the next `/plan` call. |
     | `final` | Once, at the end | Stop reason + usage counters. |
     | `error` | Only on failure during streaming | Human-readable message. |
     | `done` | Always last | Empty marker so clients can close cleanly. |
@@ -152,18 +153,31 @@ paths:
         Accepts a user question + agent catalog, starts (or resumes) a
         session, and streams Server-Sent Events as the planner runs.
 
-        ### Session continuation
+        ### Session continuation (stateless model — Path A)
 
-        Pass `session_id` to resume an existing session — history persists,
-        the planner sees prior turns. Omit to start a fresh session. The
-        server returns the resolved `session_id` in the first SSE frame
-        (`event: session`), even for new sessions, so clients can cache it.
+        The gateway no longer owns durability. Each `/plan` call is its
+        own ephemeral session: pass prior turns in `history` and the
+        latest compaction summary (if you have one) in `prior_summary`.
+        The client is the canonical record; the gateway is pure compute.
 
-        ### Catalog immutability per session
+        `session_id` is now just a correlation tag echoed back on the
+        first SSE frame — it doesn't index a server-side store. The
+        durable conversation lives in your application (in the Bindu
+        reference frontend, that's comms's SQLite events log).
 
-        The `agents` catalog is stored on first plan and refreshed on each
-        subsequent call; agents added or removed between plans take effect
-        immediately but don't retroactively change prior turns' tool sets.
+        ### Compaction-summary sidechannel
+
+        When the planner compacts overflowing history, it emits an
+        `event: compaction-summary` SSE frame mid-stream. Clients
+        should persist the `summary` field locally and ship it back as
+        `prior_summary` on the next call so the planner keeps the
+        compacted context across requests.
+
+        ### Catalog immutability per request
+
+        The `agents` catalog applies to a single `/plan` call. Each
+        request is independent — there's no first-plan / subsequent-
+        plan distinction in stateless mode.
 
         ### Streaming & abort
 
@@ -297,17 +311,19 @@ paths:
                 error: "unauthorized"
         "500":
           description: |
-            Session creation failed (database unreachable, Supabase row
-            insertion error, etc.). Only emitted **before** the SSE stream
-            opens — once streaming starts, errors surface as `event: error`
-            on the stream.
+            Internal error before the SSE stream opens — e.g. planner
+            misconfiguration or an exception during request handling.
+            Once streaming starts, errors surface as `event: error` on
+            the stream instead. The `session_failed` shape from the
+            stateful era is gone; the stateless gateway has no
+            session-creation step that can fail at the DB layer.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               example:
-                error: "session_failed"
-                detail: "Supabase insert failed: connection refused"
+                error: "internal_error"
+                detail: "planner: model unavailable"
 
   /health:
     get:
@@ -337,7 +353,7 @@ paths:
                 version: "0.1.0"
                 health: "healthy"
                 runtime:
-                  storage_backend: "Supabase"
+                  storage_backend: "stateless"
                   bus_backend: "EffectPubSub"
                   planner:
                     model: "openrouter/anthropic/claude-sonnet-4.6"
@@ -351,7 +367,7 @@ paths:
                   hydra_integrated: true
                 application:
                   name: "@bindu/gateway"
-                  session_mode: "stateful"
+                  session_mode: "stateless"
                   gateway_did: "did:bindu:ops_at_example_com:gateway:f72ba681-f873-324c-6012-23c4d5b72451"
                   gateway_id: "f72ba681-f873-324c-6012-23c4d5b72451"
                   author: "ops_at_example_com"
@@ -467,12 +483,61 @@ components:
         session_id:
           type: string
           description: |
-            Opaque external session identifier. If provided AND a session
-            row exists with the matching `external_session_id`, that
-            session is resumed (history persists). If omitted or
-            unmatched, a new session is created and its server-assigned
-            id is surfaced in the first SSE `session` event.
+            Opaque correlation tag the caller chooses. Echoed back on
+            the first SSE `session` frame as `external_session_id`.
+            In the stateless gateway this is NOT a resumption key —
+            the gateway has no persistent session store. Pass prior
+            turns explicitly via `history` (and optionally a
+            `prior_summary`) to give the planner context across
+            calls.
           example: "client-session-42"
+        history:
+          type: array
+          description: |
+            Prior conversation for this session. The client (canonical
+            record) sends the most recent turns on every call so the
+            planner has context. Older turns that didn't fit into the
+            cap are preserved as the `prior_summary` field instead.
+            Order: oldest → newest. Omit (or send `[]`) for a brand-
+            new session.
+
+            Reference frontend (comms) caps this at 30 turns; bigger
+            payloads work but waste tokens.
+          items:
+            $ref: "#/components/schemas/HistoryTurn"
+        prior_summary:
+          type: string
+          description: |
+            Compaction summary the gateway emitted on a prior call,
+            persisted by the client. The planner sees it as a
+            synthetic user turn at the head of history: "[Prior
+            session context, compacted]\n\n...". Omit on first call.
+          example: "[Prior session context, compacted]\n\nUser asked about Apple Q3 earnings; planner ran research_agent.search then summarizer.summarize…"
+
+    HistoryTurn:
+      type: object
+      required: [role, parts]
+      description: |
+        One user/assistant turn from prior conversation. Minimal
+        shape — no metadata, no ids — because the gateway doesn't
+        persist these anymore; they're only used to populate the
+        planner's prompt for the current call.
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        parts:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [type, text]
+            properties:
+              type:
+                type: string
+                enum: [text]
+              text:
+                type: string
 
     AgentRequest:
       type: object
@@ -752,7 +817,12 @@ components:
       properties:
         storage_backend:
           type: string
-          description: Durable session store. Today always `Supabase`.
+          enum: [stateless]
+          description: |
+            The gateway's persistence model. Always `stateless` since
+            the Path A migration — session state lives in memory for
+            the lifetime of each `/plan` call only; the calling client
+            owns durable history.
         bus_backend:
           type: string
           description: Event bus driver. Today always `EffectPubSub` (in-process).
@@ -808,8 +878,12 @@ components:
           const: "@bindu/gateway"
         session_mode:
           type: string
-          enum: [stateful, stateless]
-          description: Configured session persistence mode.
+          enum: [stateless]
+          description: |
+            Session persistence model. Always `stateless` — the
+            `stateful` value (Supabase-backed) was removed in the
+            Path A migration. Clients pass prior turns via
+            `history` on each /plan call.
         gateway_did:
           type: [string, "null"]
           description: The gateway's full DID, null when no identity is configured.
@@ -892,7 +966,7 @@ components:
       properties:
         error:
           type: string
-          enum: [unauthorized, invalid_request, session_failed]
+          enum: [unauthorized, invalid_request, internal_error]
           description: Machine-readable error code.
         detail:
           type: string
@@ -1093,6 +1167,43 @@ components:
       type: object
       description: Empty object. Last frame of every successful plan.
       additionalProperties: false
+
+    SSEEvent_CompactionSummary:
+      type: object
+      required: [session_id, summary]
+      description: |
+        Emitted whenever the planner's compaction layer runs and
+        produces a new summary (mid-stream, between planner steps).
+
+        The client must persist `summary` keyed by `session_id` and
+        ship it back as `prior_summary` on the next `/plan` call.
+        Without that loop, every long session re-pays the
+        summarisation cost on each request because the planner sees
+        no compacted context.
+
+        Frame placement is non-deterministic — depends on when
+        history overflows the model's context window. Short
+        sessions may never produce one; long ones may produce
+        several across consecutive `/plan` calls.
+      properties:
+        session_id:
+          type: string
+        summary:
+          type: string
+          description: |
+            One paragraph (typically 200–800 tokens) that captures
+            the load-bearing facts from the compacted head turns.
+            Persist verbatim — the planner trusts that it carries
+            forward every prior compaction's content.
+        tokens_before:
+          type: integer
+          description: Total history tokens (estimated) just before this compaction ran.
+        tokens_after:
+          type: integer
+          description: Total history tokens after compaction (tail + summary).
+        messages_compacted:
+          type: integer
+          description: How many real (non-synthetic) messages were folded into the summary.
 
     AgentDIDSource:
       type: [string, "null"]

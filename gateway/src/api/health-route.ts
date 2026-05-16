@@ -74,7 +74,10 @@ export interface HealthResponse {
   }
   readonly application: {
     readonly name: string
-    readonly session_mode: "stateful" | "stateless"
+    // Path A: stateless is the only mode. Kept as a single-variant
+    // literal so consumers that inspect this field don't have to
+    // change shape; the value just never alternates.
+    readonly session_mode: "stateless"
     readonly gateway_did: string | null
     readonly gateway_id: string | null
     readonly author: string | null
@@ -222,7 +225,12 @@ export const buildHealthHandler = (identity: LocalIdentity | undefined, hydraInt
         version,
         health,
         runtime: {
-          storage_backend: "Supabase",
+          // Path A: gateway is stateless. No Supabase, no Postgres, no
+          // local SQLite — sessions live in-process for the duration
+          // of each /plan call and the canonical record is on the
+          // client. Reported as "stateless" so operators don't go
+          // looking for a DB connection.
+          storage_backend: "stateless",
           bus_backend: "EffectPubSub",
           planner: plannerInfo,
           recipe_count: recipeCount,
@@ -231,7 +239,7 @@ export const buildHealthHandler = (identity: LocalIdentity | undefined, hydraInt
         },
         application: {
           name: "@bindu/gateway",
-          session_mode: cfg.gateway.session.mode,
+          session_mode: "stateless",
           gateway_did: gatewayDid,
           gateway_id: gatewayId,
           author,

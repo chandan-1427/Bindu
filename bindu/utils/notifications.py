@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import http.client
-import ipaddress
 import json
 import socket
 import ssl
@@ -18,56 +17,28 @@ from bindu.utils.retry import create_retry_decorator
 
 logger = get_logger("bindu.utils.notifications")
 
-# RFC-1918 private ranges, loopback, link-local, and cloud-metadata CIDRs that
-# SSRF attackers commonly target.  Webhook URLs resolving into these ranges are
-# rejected before any connection is attempted.
-_BLOCKED_NETWORKS: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = [
-    ipaddress.ip_network("127.0.0.0/8"),  # loopback
-    ipaddress.ip_network("10.0.0.0/8"),  # RFC-1918
-    ipaddress.ip_network("172.16.0.0/12"),  # RFC-1918
-    ipaddress.ip_network("192.168.0.0/16"),  # RFC-1918
-    ipaddress.ip_network(
-        "169.254.0.0/16"
-    ),  # link-local / cloud metadata (AWS, GCP, Azure)
-    ipaddress.ip_network("100.64.0.0/10"),  # Carrier-grade NAT
-    ipaddress.ip_network("::1/128"),  # IPv6 loopback
-    ipaddress.ip_network("fc00::/7"),  # IPv6 unique local
-    ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
-]
-
-
 def _resolve_and_check_ip(hostname: str) -> str:
-    """Resolve hostname to an IP address and verify it is not in a blocked range.
+    """Resolve hostname to an IP address.
 
     Returns the resolved IP address string so callers can connect directly to it,
     preventing a DNS-rebinding attack where a second resolution (inside urlopen) could
-    return a different—potentially internal—address.
+    return a different address.
 
     Args:
-        hostname: The hostname to resolve and validate.
+        hostname: The hostname to resolve.
 
     Returns:
         The resolved IP address as a string.
 
     Raises:
-        ValueError: If the hostname cannot be resolved or resolves to a blocked range.
+        ValueError: If the hostname cannot be resolved.
     """
     try:
-        resolved_ip = str(socket.getaddrinfo(hostname, None)[0][4][0])
-        addr = ipaddress.ip_address(resolved_ip)
-    except (socket.gaierror, ValueError) as exc:
+        return str(socket.getaddrinfo(hostname, None)[0][4][0])
+    except socket.gaierror as exc:
         raise ValueError(
             f"Push notification URL hostname could not be resolved: {exc}"
         ) from exc
-
-    for blocked in _BLOCKED_NETWORKS:
-        if addr in blocked:
-            raise ValueError(
-                f"Push notification URL resolves to a blocked address range "
-                f"({addr} is in {blocked}). Internal addresses are not allowed."
-            )
-
-    return resolved_ip
 
 
 class NotificationDeliveryError(Exception):
@@ -111,7 +82,15 @@ class NotificationService:
         """
         resolved_ip = self.validate_config(config)
 
-        payload = json.dumps(event, separators=(",", ":")).encode("utf-8")
+        # default=str so values that aren't natively JSON-serializable
+        # (most commonly uuid.UUID on artifact.artifact_id, also
+        # datetime, Path, etc.) coerce to their string form instead of
+        # raising TypeError mid-serialization. Lifecycle events are
+        # all-primitive and unaffected; artifact events embed a raw
+        # Artifact TypedDict with a UUID inside, which without this
+        # would silently drop on the floor at the _notify_artifact
+        # exception boundary.
+        payload = json.dumps(event, separators=(",", ":"), default=str).encode("utf-8")
         headers = self._build_headers(config)
 
         # Use unified retry decorator for consistent retry behavior

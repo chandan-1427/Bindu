@@ -1,19 +1,56 @@
 import { Context, Effect, Layer } from "effect"
-import { Service as DBService, type MessageRow, type SessionRow } from "../db"
 import { AssistantMessageInfo, UserMessageInfo, type MessageInfo, type MessageWithParts, type Part } from "./message"
 import { MessageID, SessionID, newMessageID, newSessionID } from "./schema"
-import { z } from "zod"
 
 /**
- * Session service — thin wrapper over DB.Service with canonical message
- * conversions.
+ * Session service — in-memory (Path A, stateless gateway).
  *
- * The DB stores one message row per Message with all its parts inlined as a
- * JSONB array on the `parts` column. Much simpler than OpenCode's separate
- * Message + Part tables because our Part set is smaller and we don't need
- * per-part streaming mutation — parts are written atomically once the
- * assistant message completes a step.
+ * The gateway no longer owns durability. Each /plan request hands us
+ * the prior history (from the client's record); we stash it for the
+ * lifetime of the call, append new turns as the planner runs, and
+ * forget it when the process restarts. Compaction summaries that the
+ * planner produces get shipped to the client via SSE (see
+ * `session/compaction.ts` + `api/plan-route.ts`) so the client can
+ * persist and replay them on the next call.
+ *
+ * Memory model: one Map<SessionID, InMemorySession>. Sessions accumulate
+ * over the process lifetime — for a single-operator deployment this is
+ * bounded by request rate × turn count and is well under any
+ * meaningful memory pressure. If that changes (multi-tenant SaaS,
+ * etc.) add a TTL sweep here.
  */
+
+// Local SessionRow shape — used to be in ../db, kept here at the same
+// shape callers expect so the planner/api don't need to change.
+export interface SessionRow {
+  id: string
+  external_session_id: string | null
+  agent_catalog: unknown[]
+  created_at: string
+  last_active_at: string
+}
+
+interface InMemorySession {
+  id: SessionID
+  externalSessionID: string | null
+  agentCatalog: unknown[]
+  history: MessageWithParts[]
+  compactionSummary: string | null
+  createdAt: string
+  lastActiveAt: string
+}
+
+const store = new Map<SessionID, InMemorySession>()
+
+function toRow(s: InMemorySession): SessionRow {
+  return {
+    id: s.id,
+    external_session_id: s.externalSessionID,
+    agent_catalog: s.agentCatalog,
+    created_at: s.createdAt,
+    last_active_at: s.lastActiveAt,
+  }
+}
 
 export interface CreateInput {
   externalSessionID?: string
@@ -41,72 +78,86 @@ export interface Interface {
   readonly appendUser: (input: AppendUserInput) => Effect.Effect<MessageWithParts, Error>
   readonly appendAssistant: (input: AppendAssistantInput) => Effect.Effect<MessageWithParts, Error>
   readonly replaceAssistant: (input: AppendAssistantInput) => Effect.Effect<MessageWithParts, Error>
+  // Compaction-summary slots — used to live on the DB row, now live
+  // on the in-memory session. The compaction layer reads via
+  // getSummary(), writes via setSummary(), and prunes the head of
+  // history via markCompacted(). All scoped to the session's lifetime
+  // in this process.
+  readonly getSummary: (id: SessionID) => Effect.Effect<string | null, Error>
+  readonly setSummary: (id: SessionID, summary: string) => Effect.Effect<void, Error>
+  readonly markCompacted: (
+    id: SessionID,
+    messageIDs: ReadonlyArray<MessageID>,
+  ) => Effect.Effect<void, Error>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@bindu/Session") {}
 
-function toWire(info: MessageInfo, parts: Part[]) {
-  return {
-    role: info.role,
-    parts,
-    metadata: { info },
-  }
-}
-
-function fromWire(row: MessageRow): MessageWithParts {
-  const metaInfo = (row.metadata as Record<string, unknown> | undefined)?.info
-  if (!metaInfo) throw new Error(`session: message row ${row.id} missing metadata.info`)
-  const info = parseInfoWithDefaults(metaInfo, row)
-  return {
-    info,
-    parts: z.array(z.any()).parse(row.parts) as Part[],
-  }
-}
-
-function parseInfoWithDefaults(raw: unknown, row: MessageRow): MessageInfo {
-  // metadata.info is written by our own code, so the shape should always
-  // match. But message rows persist across gateway restarts and version
-  // bumps — parse permissively to tolerate forward-compat drift.
+function parseInfo(raw: unknown, msgID: string): MessageInfo {
   const obj = raw as Record<string, unknown>
   if (obj.role === "user") return UserMessageInfo.parse(obj)
   if (obj.role === "assistant") return AssistantMessageInfo.parse(obj)
-  throw new Error(`session: unknown role on message row ${row.id}: ${String(obj.role)}`)
+  throw new Error(`session: unknown role on message ${msgID}: ${String(obj.role)}`)
 }
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const db = yield* DBService
-
-    const create: Interface["create"] = ({ externalSessionID, userPrefs, agentCatalog }) =>
-      db.createSession({
-        externalId: externalSessionID,
-        prefs: userPrefs,
-        agentCatalog,
+    const create: Interface["create"] = ({ externalSessionID, agentCatalog }) =>
+      Effect.sync(() => {
+        const id = newSessionID()
+        const now = new Date().toISOString()
+        const sess: InMemorySession = {
+          id,
+          externalSessionID: externalSessionID ?? null,
+          agentCatalog: agentCatalog ?? [],
+          history: [],
+          compactionSummary: null,
+          createdAt: now,
+          lastActiveAt: now,
+        }
+        store.set(id, sess)
+        return toRow(sess)
       })
 
     const get: Interface["get"] = (key) =>
-      db.getSession({ id: key.id, externalId: key.externalID })
+      Effect.sync(() => {
+        if (key.id) {
+          const s = store.get(key.id as SessionID)
+          return s ? toRow(s) : undefined
+        }
+        if (key.externalID) {
+          for (const s of store.values()) {
+            if (s.externalSessionID === key.externalID) return toRow(s)
+          }
+        }
+        return undefined
+      })
 
-    const touch: Interface["touch"] = (id) => db.touchSession(id)
+    const touch: Interface["touch"] = (id) =>
+      Effect.sync(() => {
+        const s = store.get(id)
+        if (s) s.lastActiveAt = new Date().toISOString()
+      })
 
     const updateAgentCatalog: Interface["updateAgentCatalog"] = (id, catalog) =>
-      db.updateSessionCatalog(id, catalog)
+      Effect.sync(() => {
+        const s = store.get(id)
+        if (s) {
+          s.agentCatalog = catalog
+          s.lastActiveAt = new Date().toISOString()
+        }
+      })
 
     const history: Interface["history"] = (sessionID) =>
-      Effect.gen(function* () {
-        const rows = yield* db.listMessages(sessionID)
-        const active = rows.map(fromWire)
-
-        // Inject compaction summary at the head as a synthetic user
-        // message. Using "user" role (not "system") because most providers
-        // treat a single system block as the agent prompt; we don't want
-        // to clobber that. Tagging `synthetic: true` so audit/debug can
-        // distinguish it from real turns.
-        const sess = yield* db.getSession({ id: sessionID })
-        const summary = (sess as unknown as { compaction_summary?: string })?.compaction_summary
-        if (!summary) return active
-
+      Effect.sync(() => {
+        const s = store.get(sessionID)
+        if (!s) return []
+        // Mirrors the old DB-backed behavior: prepend the compaction
+        // summary as a synthetic user turn so the planner sees prior
+        // context that has been folded into the summary. "user" role
+        // (not "system") preserves the planner's own system block.
+        if (!s.compactionSummary) return s.history
         const synthetic: MessageWithParts = {
           info: {
             id: newMessageID(),
@@ -118,53 +169,72 @@ export const layer = Layer.effect(
             {
               id: newMessageID() as unknown as import("./schema").PartID,
               type: "text",
-              text: `[Prior session context, compacted]\n\n${summary}`,
+              text: `[Prior session context, compacted]\n\n${s.compactionSummary}`,
               synthetic: true,
               time: { start: Date.now() },
             },
           ],
         }
-        return [synthetic, ...active]
+        return [synthetic, ...s.history]
       })
 
     const appendUser: Interface["appendUser"] = ({ sessionID, parts }) =>
-      Effect.gen(function* () {
+      Effect.sync(() => {
+        const s = store.get(sessionID)
+        if (!s) throw new Error(`session: appendUser on unknown ${sessionID}`)
         const info: UserMessageInfo = {
           id: newMessageID(),
           sessionID,
           role: "user",
           time: { created: Date.now() },
         }
-        const wire = toWire(info, parts)
-        const row = yield* db.appendMessage({
-          sessionId: sessionID,
-          role: wire.role,
-          parts: wire.parts,
-          metadata: wire.metadata,
-        })
-        yield* db.touchSession(sessionID)
-        return { info: parseInfoWithDefaults(wire.metadata.info, row), parts }
+        const msg: MessageWithParts = { info, parts }
+        s.history.push(msg)
+        s.lastActiveAt = new Date().toISOString()
+        return msg
       })
 
     const appendAssistant: Interface["appendAssistant"] = ({ sessionID, info, parts }) =>
-      Effect.gen(function* () {
-        const wire = toWire(info, parts)
-        yield* db.appendMessage({
-          sessionId: sessionID,
-          role: wire.role,
-          parts: wire.parts,
-          metadata: wire.metadata,
-        })
-        yield* db.touchSession(sessionID)
-        return { info, parts }
+      Effect.sync(() => {
+        const s = store.get(sessionID)
+        if (!s) throw new Error(`session: appendAssistant on unknown ${sessionID}`)
+        const msg: MessageWithParts = { info, parts }
+        s.history.push(msg)
+        s.lastActiveAt = new Date().toISOString()
+        return msg
       })
 
-    /**
-     * Replace is best-effort: DB stores each assistant step as its own row
-     * for now. A Phase 2 enhancement could add an `upsert_by(messageID)`
-     * query. For MVP, we just append; history is flat and streaming-safe.
-     */
+    // Stateless mode keeps replaceAssistant as an append — the planner
+    // currently emits one row per step, and the in-memory store has no
+    // notion of "the previous assistant message for this messageID" to
+    // overwrite. If that becomes important later we can index by
+    // info.id and splice.
     const replaceAssistant: Interface["replaceAssistant"] = appendAssistant
+
+    const getSummary: Interface["getSummary"] = (id) =>
+      Effect.sync(() => store.get(id)?.compactionSummary ?? null)
+
+    const setSummary: Interface["setSummary"] = (id, summary) =>
+      Effect.sync(() => {
+        const s = store.get(id)
+        if (s) {
+          s.compactionSummary = summary
+          s.lastActiveAt = new Date().toISOString()
+        }
+      })
+
+    const markCompacted: Interface["markCompacted"] = (id, messageIDs) =>
+      Effect.sync(() => {
+        const s = store.get(id)
+        if (!s) return
+        // For in-memory: actually drop the compacted rows instead of
+        // marking them with a flag. The DB needed a flag because rows
+        // had to persist for audit; in-memory has no such constraint
+        // and dropping saves bytes during long sessions.
+        const idSet = new Set(messageIDs.map(String))
+        s.history = s.history.filter((m) => !idSet.has(String(m.info.id)))
+        s.lastActiveAt = new Date().toISOString()
+      })
 
     return Service.of({
       create,
@@ -175,6 +245,9 @@ export const layer = Layer.effect(
       appendUser,
       appendAssistant,
       replaceAssistant,
+      getSummary,
+      setSummary,
+      markCompacted,
     })
   }),
 )
@@ -183,6 +256,5 @@ export { SessionID, newSessionID, MessageID, newMessageID } from "./schema"
 export type { MessageWithParts } from "./message"
 export * as Message from "./message"
 export * as Compaction from "./compaction"
-export * as Revert from "./revert"
 export * as Overflow from "./overflow"
 export * as Summary from "./summary"
