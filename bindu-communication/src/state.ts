@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { Agent, AgentRole, DetailTab, StreamEvent } from "~/types";
-import { agents as seedAgents } from "~/data/mock";
 
 export type TrustPolicy =
 	| "fully-supervised"
@@ -116,12 +115,12 @@ function saveDrafts(drafts: Draft[]): void {
 }
 
 export const useUI = create<UIState>((set) => ({
-	selectedEventId: "wa-7",
+	selectedEventId: null,
 	selectedThreadId: null,
 	detailTab: "glance",
 	showRegister: false,
 	showCompose: false,
-	agents: seedAgents,
+	agents: [],
 	liveEvents: [],
 	readOverrides: new Set(),
 	unreadOverrides: new Set(),

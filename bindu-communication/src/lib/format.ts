@@ -1,10 +1,28 @@
 import type { EventKind, EventState, TrustLevel } from "~/types";
 
-export function shortDid(did: string): string {
+/** Shorten a DID for display by truncating its trailing segment.
+ *
+ * `tailChars` controls how many characters of the last colon-segment
+ * survive — defaults to 6 for general DID rendering; thread-key short
+ * IDs use 4 (see {@link shortContextId}). */
+export function shortDid(did: string, tailChars = 6): string {
 	if (did.length <= 28) return did;
 	const parts = did.split(":");
 	const last = parts[parts.length - 1] ?? "";
-	return parts.slice(0, -1).join(":") + ":" + last.slice(0, 6) + "…";
+	return parts.slice(0, -1).join(":") + ":" + last.slice(0, tailChars) + "…";
+}
+
+/** Normalise a free-form name into a URL/agent-id-safe slug.
+ *
+ * Used wherever the UI mints an id from a human-readable name:
+ * register-agent flow (`state.ts` + `RegisterModal`). Falls back to a
+ * short random id when the input slugs to empty. */
+export function slugify(name: string, fallbackPrefix = "agent"): string {
+	const slug = name
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/(^-|-$)/g, "");
+	return slug || `${fallbackPrefix}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
 export const trustMeta: Record<

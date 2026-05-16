@@ -4,6 +4,8 @@ import clsx from "clsx";
 import { XIcon, KeyIcon, ArrowsClockwiseIcon } from "@phosphor-icons/react";
 import { useUI, type TrustPolicy } from "~/state";
 import type { AgentRole } from "~/types";
+import { Modal } from "./Modal";
+import { slugify } from "~/lib/format";
 
 const ROLES: { value: AgentRole; label: string; desc: string }[] = [
 	{ value: "agent", label: "Agent", desc: "Standard A2A endpoint that responds to other agents." },
@@ -29,11 +31,7 @@ const POLICIES: { value: TrustPolicy; label: string; desc: string }[] = [
 ];
 
 function generateDid(name: string, role: AgentRole): string {
-	const slug =
-		name
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, "-")
-			.replace(/(^-|-$)/g, "") || "new-agent";
+	const slug = slugify(name, "new-agent");
 	const rand = Math.random().toString(16).slice(2, 10);
 	const tail = `${rand.slice(0, 4)}-${rand.slice(4, 8)}`;
 	return `did:bindu:raahul:${role === "gateway" ? "gateway" : slug}:${tail}`;
@@ -63,17 +61,6 @@ export function RegisterModal() {
 		setDid(generateDid(name, role));
 	}, [name, role]);
 
-	useEffect(() => {
-		if (!showRegister) return;
-		function onKey(e: KeyboardEvent) {
-			if (e.key === "Escape") closeRegister();
-		}
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [showRegister, closeRegister]);
-
-	if (!showRegister) return null;
-
 	const canSubmit = name.trim().length > 0;
 
 	function handleSubmit(e: React.FormEvent) {
@@ -84,13 +71,9 @@ export function RegisterModal() {
 	}
 
 	return (
-		<div
-			className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm"
-			onClick={closeRegister}
-		>
+		<Modal open={showRegister} onClose={closeRegister}>
 			<form
 				onSubmit={handleSubmit}
-				onClick={(e) => e.stopPropagation()}
 				className="w-[480px] max-w-[92vw] rounded-lg border border-[--color-border] bg-white shadow-2xl"
 			>
 				{/* Header */}
@@ -243,6 +226,6 @@ export function RegisterModal() {
 					</button>
 				</div>
 			</form>
-		</div>
+		</Modal>
 	);
 }

@@ -8,13 +8,10 @@ import {
 } from "@phosphor-icons/react";
 import { shortDid } from "~/lib/format";
 import { useUI } from "~/state";
-
-interface EcosystemAgent {
-	id: string;
-	url?: string;
-	did?: { id?: string } | null;
-	agentCard?: { name?: string } | null;
-}
+import { Modal } from "./Modal";
+import { postJson } from "~/lib/fetch";
+import { OUTBOX_AGENT_ID } from "~/lib/constants";
+import type { EcosystemAgent } from "~/lib/api-types";
 
 interface Props {
 	open: boolean;
@@ -53,7 +50,7 @@ export function ComposeModal({ open, onClose }: Props) {
 		fetch("/api/ecosystem")
 			.then((r) => (r.ok ? r.json() : []))
 			.then((j: EcosystemAgent[]) => {
-				const filtered = j.filter((a) => a.id !== "outbox");
+				const filtered = j.filter((a) => a.id !== OUTBOX_AGENT_ID);
 				setAgents(filtered);
 				if (draftToLoad?.agentId) {
 					setAgentId(draftToLoad.agentId);
@@ -63,15 +60,6 @@ export function ComposeModal({ open, onClose }: Props) {
 			})
 			.catch(() => {});
 	}, [open, composeDraftId, drafts]);
-
-	useEffect(() => {
-		if (!open) return;
-		function onKey(e: KeyboardEvent) {
-			if (e.key === "Escape") onClose();
-		}
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [open, onClose]);
 
 	// Auto-save on close (unless we just sent it).
 	const saveOnClose = () => {
@@ -113,43 +101,23 @@ export function ComposeModal({ open, onClose }: Props) {
 		if (!canSubmit) return;
 		setStatus("sending");
 		setErrMsg(null);
-		try {
-			const r = await fetch("/api/compose", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ agentId, text: text.trim() }),
-			});
-			const j = (await r.json().catch(() => ({}))) as {
-				ok?: boolean;
-				error?: string;
-				detail?: string;
-			};
-			if (!r.ok || j.ok === false) {
-				setStatus("error");
-				setErrMsg(j.detail ?? j.error ?? `HTTP ${r.status}`);
-				return;
-			}
-			// Successful send — clear any draft we were editing.
-			if (draftId) deleteDraft(draftId);
-			sentRef.current = true;
-			navigate("/sent");
-			onClose();
-		} catch (err) {
+		const r = await postJson("/api/compose", { agentId, text: text.trim() });
+		if (!r.ok) {
 			setStatus("error");
-			setErrMsg((err as Error).message);
+			setErrMsg(r.errMsg);
+			return;
 		}
+		// Successful send — clear any draft we were editing.
+		if (draftId) deleteDraft(draftId);
+		sentRef.current = true;
+		navigate("/sent");
+		onClose();
 	}
 
-	if (!open) return null;
-
 	return (
-		<div
-			className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm"
-			onClick={handleCloseClick}
-		>
+		<Modal open={open} onClose={handleCloseClick}>
 			<form
 				onSubmit={handleSubmit}
-				onClick={(e) => e.stopPropagation()}
 				className="w-[560px] max-w-[92vw] rounded-lg border border-[--color-border] bg-white shadow-2xl"
 			>
 				<div className="flex items-center gap-2.5 border-b border-[--color-border-soft] px-5 py-3">
@@ -264,6 +232,6 @@ export function ComposeModal({ open, onClose }: Props) {
 					</div>
 				</div>
 			</form>
-		</div>
+		</Modal>
 	);
 }

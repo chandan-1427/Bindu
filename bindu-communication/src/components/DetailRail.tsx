@@ -1,25 +1,14 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
-import { events as mockEvents } from "~/data/mock";
 import { useUI } from "~/state";
+import { useAllEvents } from "~/lib/hooks";
 import { stateMeta, trustMeta } from "~/lib/format";
+import { postJson } from "~/lib/fetch";
+import type { EcosystemAgent } from "~/lib/api-types";
 import type { DetailTab } from "~/types";
 
-function useAllEvents() {
-	const liveEvents = useUI((s) => s.liveEvents);
-	return [...liveEvents, ...mockEvents];
-}
-
-interface ResolvedAgent {
-	id: string;
-	url?: string;
-	did?: { id?: string; verificationMethod?: Array<Record<string, unknown>> } | null;
-	agentCard?: { name?: string; capabilities?: unknown; skills?: unknown } | null;
-	resolvedAt?: string;
-}
-
-function useResolvedAgent(agentId: string | undefined): ResolvedAgent | null {
-	const [data, setData] = useState<ResolvedAgent | null>(null);
+function useResolvedAgent(agentId: string | undefined): EcosystemAgent | null {
+	const [data, setData] = useState<EcosystemAgent | null>(null);
 	useEffect(() => {
 		if (!agentId) return setData(null);
 		setData(null);
@@ -252,35 +241,20 @@ function ActionPanel({
 	async function send(kind: "approve" | "decline" | "input" | "pay", body?: { text?: string }) {
 		setStatus("sending");
 		setErrMsg(null);
-		try {
-			const r = await fetch(`/api/events/${encodeURIComponent(eventId)}/action`, {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ kind, ...body }),
-			});
-			const j = (await r.json().catch(() => ({}))) as {
-				ok?: boolean;
-				delivered?: boolean;
-				protocolMovePending?: boolean;
-				error?: string;
-			};
-			if (!r.ok || j.ok === false) {
-				setStatus("error");
-				setErrMsg(j.error ?? `HTTP ${r.status}`);
-				return;
-			}
-			if (j.delivered) {
-				setStatus("delivered");
-				setText("");
-			} else if (j.protocolMovePending) {
-				setStatus("recorded");
-			} else {
-				setStatus("delivered");
-				setText("");
-			}
-		} catch (e) {
+		const r = await postJson<{ delivered?: boolean; protocolMovePending?: boolean }>(
+			`/api/events/${encodeURIComponent(eventId)}/action`,
+			{ kind, ...body },
+		);
+		if (!r.ok) {
 			setStatus("error");
-			setErrMsg((e as Error).message);
+			setErrMsg(r.errMsg);
+			return;
+		}
+		if (r.data?.protocolMovePending) {
+			setStatus("recorded");
+		} else {
+			setStatus("delivered");
+			setText("");
 		}
 	}
 

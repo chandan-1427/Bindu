@@ -8,7 +8,6 @@ import {
 	ShieldCheckIcon,
 	ArrowsClockwiseIcon,
 } from "@phosphor-icons/react";
-import { events as mockEvents } from "~/data/mock";
 import { useUI } from "~/state";
 import { ThreadList } from "./ThreadList";
 import { ThreadView } from "./ThreadView";
@@ -99,11 +98,10 @@ export function StreamPanel() {
 	// is then applied at the THREAD level inside ThreadList. The agent
 	// debug mode keeps the legacy per-lane filter.
 	const filteredEvents = useMemo(() => {
-		const all = [...liveEvents, ...mockEvents];
 		if (mode.kind === "agent") {
-			return all.filter((e) => e.agentId === mode.agentId);
+			return liveEvents.filter((e) => e.agentId === mode.agentId);
 		}
-		return all;
+		return liveEvents;
 	}, [mode, liveEvents]);
 
 	const FOLDER_TITLES: Record<Folder, string> = {

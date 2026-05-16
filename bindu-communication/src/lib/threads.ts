@@ -1,6 +1,6 @@
 import type { StreamEvent } from "~/types";
-
-const OUTBOX_AGENT_ID = "outbox";
+import { OUTBOX_AGENT_ID } from "~/lib/constants";
+import { shortDid } from "~/lib/format";
 
 export type ThreadOrigin = "operator" | "other";
 
@@ -150,12 +150,8 @@ export function extractContextId(e: StreamEvent): string | null {
 
 export function shortContextId(ctx: string): string {
 	if (ctx.length <= 12) return ctx;
-	// DID-style keys (did:bindu:…) get the existing DID short rendering
-	if (ctx.startsWith("did:")) {
-		const parts = ctx.split(":");
-		const last = parts[parts.length - 1] ?? "";
-		return `${parts.slice(0, -1).join(":")}:${last.slice(0, 4)}…`;
-	}
+	// DID-style thread keys reuse the DID renderer with a tighter tail.
+	if (ctx.startsWith("did:")) return shortDid(ctx, 4);
 	// Raw context IDs (UUIDs etc.) get first…last
 	return ctx.slice(0, 8) + "…" + ctx.slice(-4);
 }

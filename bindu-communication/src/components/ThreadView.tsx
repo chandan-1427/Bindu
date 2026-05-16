@@ -4,7 +4,6 @@ import { ArrowLeftIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
 import { useUI } from "~/state";
 import { eventsInThread, shortContextId } from "~/lib/threads";
 import { EventRow } from "./EventRow";
-import { events as mockEvents } from "~/data/mock";
 import type { StreamEvent } from "~/types";
 
 interface Props {
@@ -24,7 +23,7 @@ const OUTBOX_AGENT_ID = "outbox";
 export function ThreadView({ contextId }: Props) {
 	const selectThread = useUI((s) => s.selectThread);
 	const liveEvents = useUI((s) => s.liveEvents);
-	const ordered = eventsInThread([...liveEvents, ...mockEvents], contextId);
+	const ordered = eventsInThread(liveEvents, contextId);
 	const first = ordered[0];
 	const counterpartyName = first?.counterparty.name ?? "—";
 	const agentLanes = Array.from(new Set(ordered.map((e) => e.agentId)));

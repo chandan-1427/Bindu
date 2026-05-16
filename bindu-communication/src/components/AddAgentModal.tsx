@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { XIcon, GlobeIcon } from "@phosphor-icons/react";
+import { Modal } from "./Modal";
+import { postJson } from "~/lib/fetch";
 
 interface Props {
 	open: boolean;
@@ -21,17 +23,6 @@ export function AddAgentModal({ open, onClose, onAdded }: Props) {
 		}
 	}, [open]);
 
-	useEffect(() => {
-		if (!open) return;
-		function onKey(e: KeyboardEvent) {
-			if (e.key === "Escape") onClose();
-		}
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [open, onClose]);
-
-	if (!open) return null;
-
 	const trimmed = url.trim();
 	const canSubmit = /^https?:\/\//.test(trimmed) && status !== "loading";
 
@@ -40,37 +31,20 @@ export function AddAgentModal({ open, onClose, onAdded }: Props) {
 		if (!canSubmit) return;
 		setStatus("loading");
 		setErrMsg(null);
-		try {
-			const r = await fetch("/api/ecosystem", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ url: trimmed }),
-			});
-			const j = (await r.json().catch(() => ({}))) as {
-				error?: string;
-				detail?: string;
-			};
-			if (!r.ok) {
-				setStatus("error");
-				setErrMsg(j.detail ?? j.error ?? `HTTP ${r.status}`);
-				return;
-			}
-			onAdded();
-			onClose();
-		} catch (err) {
+		const r = await postJson("/api/ecosystem", { url: trimmed });
+		if (!r.ok) {
 			setStatus("error");
-			setErrMsg((err as Error).message);
+			setErrMsg(r.errMsg);
+			return;
 		}
+		onAdded();
+		onClose();
 	}
 
 	return (
-		<div
-			className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm"
-			onClick={onClose}
-		>
+		<Modal open={open} onClose={onClose}>
 			<form
 				onSubmit={handleSubmit}
-				onClick={(e) => e.stopPropagation()}
 				className="w-[480px] max-w-[92vw] rounded-lg border border-[--color-border] bg-white shadow-2xl"
 			>
 				<div className="flex items-center gap-2.5 border-b border-[--color-border-soft] px-5 py-3">
@@ -137,6 +111,6 @@ export function AddAgentModal({ open, onClose, onAdded }: Props) {
 					</button>
 				</div>
 			</form>
-		</div>
+		</Modal>
 	);
 }
