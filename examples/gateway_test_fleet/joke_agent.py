@@ -1,4 +1,4 @@
-"""Joke Agent — port 3773.
+"""Joke Agent — port 5773.
 
 Part of the gateway_test_fleet: five single-file agents deliberately
 narrow in scope so the gateway's planner has to pick the right one for
@@ -8,9 +8,13 @@ Narrow instructions are intentional. We want the planner to fail cleanly
 when asked to do something off-topic (e.g. "solve an equation") — not to
 helpfully attempt the off-topic request and muddy the test signal.
 
+Port: 5xxx range is reserved for agents (3xxx is infra — comms UI on
+3775, comms-api on 3787, gateway on 3774). Fleet map: 5773 joke_agent,
+5775 math, 5776 poet, 5777 research, 5778 bindu_docs.
+
 Environment:
     OPENROUTER_API_KEY — required (examples/.env)
-    BINDU_PORT         — optional override (default 3773)
+    BINDU_PORT         — optional override (default 5773)
 """
 
 import os
@@ -23,7 +27,7 @@ from bindu.penguin.bindufy import bindufy
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-PORT = int(os.getenv("BINDU_PORT", "3773"))
+PORT = int(os.getenv("BINDU_PORT", "5773"))
 
 agent = Agent(
     instructions=(
@@ -40,7 +44,7 @@ agent = Agent(
 
 def handler(messages: list[dict[str, str]]):
     """Return a joke (or decline politely)."""
-    return agent.run(input=messages)
+    return agent.run(input=messages).content
 
 
 config = {
@@ -54,7 +58,21 @@ config = {
     },
     "capabilities": {"push_notifications": True},
     "global_webhook_url": "http://127.0.0.1:3787/webhooks/bindu/joke_agent",
-    "skills": [],
+    "skills": [
+        {
+            "id": "tell_joke",
+            "name": "Tell a joke",
+            "description": (
+                "Return a short, lighthearted joke on any topic the "
+                "user requests. Declines politely for off-limits "
+                "subjects (e.g., medical, legal, sensitive)."
+            ),
+            "tags": ["humor", "joke", "entertainment"],
+            "examples": ["Tell me a programmer joke", "Make me laugh"],
+            "input_modes": ["text/plain"],
+            "output_modes": ["text/plain"],
+        }
+    ],
 }
 
 

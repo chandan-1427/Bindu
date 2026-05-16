@@ -1,12 +1,15 @@
-"""Poet Agent — port 3776.
+"""Poet Agent — port 5776.
 
 Part of the gateway_test_fleet. Writes short poems (4-line max) on a
 given topic. Narrow scope so the planner has to pick it specifically
 when the user wants creative verse.
 
+Port: 5xxx range for agents (3xxx is infra). Fleet map: 5773 joke,
+5775 math, 5776 poet ← here, 5777 research, 5778 bindu_docs.
+
 Environment:
     OPENROUTER_API_KEY — required (examples/.env)
-    BINDU_PORT         — optional override (default 3776)
+    BINDU_PORT         — optional override (default 5776)
 """
 
 import os
@@ -17,9 +20,16 @@ from dotenv import load_dotenv
 
 from bindu.penguin.bindufy import bindufy
 
+# Per-agent override: this agent demos Hydra-protected calls even when
+# the shared examples/.env keeps AUTH__ENABLED=false for the rest of the
+# fleet. Set BEFORE load_dotenv — python-dotenv defaults to
+# override=False, so already-set env vars survive.
+os.environ["AUTH__ENABLED"] = "true"
+os.environ.setdefault("AUTH__PROVIDER", "hydra")
+
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-PORT = int(os.getenv("BINDU_PORT", "3776"))
+PORT = int(os.getenv("BINDU_PORT", "5776"))
 
 agent = Agent(
     instructions=(
@@ -37,7 +47,7 @@ agent = Agent(
 
 def handler(messages: list[dict[str, str]]):
     """Write a short poem (or decline politely)."""
-    return agent.run(input=messages)
+    return agent.run(input=messages).content
 
 
 config = {
@@ -51,7 +61,24 @@ config = {
     },
     "capabilities": {"push_notifications": True},
     "global_webhook_url": "http://127.0.0.1:3787/webhooks/bindu/poet_agent",
-    "skills": [],
+    "skills": [
+        {
+            "id": "write_poem",
+            "name": "Write a short poem",
+            "description": (
+                "Compose a short poem (haiku, limerick, free verse, "
+                "etc.) on a requested topic and style. Declines "
+                "politely for sensitive subjects."
+            ),
+            "tags": ["poetry", "creative", "writing"],
+            "examples": [
+                "Write a haiku about autumn",
+                "Free verse about loneliness",
+            ],
+            "input_modes": ["text/plain"],
+            "output_modes": ["text/plain"],
+        }
+    ],
 }
 
 
