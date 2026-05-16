@@ -2,25 +2,33 @@ import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { useUI } from "~/state";
 import { eventsInThread, shortContextId } from "~/lib/threads";
 import { EventRow } from "./EventRow";
-import type { StreamEvent } from "~/types";
+import { events as mockEvents } from "~/data/mock";
 
 interface Props {
 	contextId: string;
-	events: StreamEvent[];
 }
 
 /**
- * One thread's events, oldest → newest. Reuses EventRow for each entry —
- * gateway parent/child trace indenting still works because EventRow looks
- * at its `indented` prop. We don't pass it here (threads are flat); the
- * trace concept lives inside the chronological event log, not the
- * Gmail-shape thread view.
+ * One thread's events, oldest → newest. Reuses EventRow for each entry.
+ *
+ * Crucially the event source spans ALL agents (live + mock), not just the
+ * agent whose lane the user is currently viewing. An A2A conversation
+ * lives on a context_id; the operator-side outbound message and the
+ * recipient agent's lifecycle responses share that context_id but land on
+ * different agentIds (outbox vs the recipient). Stitching them here gives
+ * the user one Gmail-style conversation instead of two half-conversations
+ * sitting in separate lanes.
+ *
+ * The lane list stays per-agent — that's the inbox; the thread view is
+ * the conversation.
  */
-export function ThreadView({ contextId, events }: Props) {
+export function ThreadView({ contextId }: Props) {
 	const selectThread = useUI((s) => s.selectThread);
-	const ordered = eventsInThread(events, contextId);
+	const liveEvents = useUI((s) => s.liveEvents);
+	const ordered = eventsInThread([...liveEvents, ...mockEvents], contextId);
 	const first = ordered[0];
 	const counterpartyName = first?.counterparty.name ?? "—";
+	const agentLanes = Array.from(new Set(ordered.map((e) => e.agentId)));
 
 	return (
 		<>
@@ -43,9 +51,16 @@ export function ThreadView({ contextId, events }: Props) {
 						{shortContextId(contextId)}
 					</span>
 				</div>
-				<span className="text-[10px] text-fg-dim">
-					{ordered.length} message{ordered.length === 1 ? "" : "s"}
-				</span>
+				<div className="flex items-center gap-2 text-[10px] text-fg-dim">
+					{agentLanes.length > 1 && (
+						<span className="rounded-full border border-[--color-cobalt]/40 bg-[--color-cobalt-soft] px-1.5 py-0.5 text-[--color-cobalt-strong]">
+							stitched across {agentLanes.length} lanes
+						</span>
+					)}
+					<span>
+						{ordered.length} message{ordered.length === 1 ? "" : "s"}
+					</span>
+				</div>
 			</div>
 
 			<div className="scrollbar flex-1 overflow-y-auto">

@@ -83,7 +83,7 @@ export function StreamPanel() {
 			<ComposeModal open={showCompose} onClose={() => setShowCompose(false)} />
 
 			{selectedThreadId ? (
-				<ThreadView contextId={selectedThreadId} events={agentEvents} />
+				<ThreadView contextId={selectedThreadId} />
 			) : (
 				<div className="scrollbar flex-1 overflow-y-auto">
 					<ThreadList events={agentEvents} />
