@@ -11,7 +11,9 @@ export interface EcosystemAgent {
 	} | null;
 	agentCard?: {
 		name?: string;
-		capabilities?: unknown;
+		capabilities?: {
+			extensions?: Array<{ uri?: string }>;
+		} | unknown;
 		skills?: unknown;
 	} | null;
 	resolvedAt?: string;

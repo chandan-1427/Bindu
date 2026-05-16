@@ -57,6 +57,8 @@ config = {
         "expose": True,
         "cors_origins": ["http://localhost:5173"],
     },
+    "capabilities": {"push_notifications": True},
+    "global_webhook_url": "http://127.0.0.1:3787/webhooks/bindu/bindu_docs_agent",
     "skills": [],
 }
 

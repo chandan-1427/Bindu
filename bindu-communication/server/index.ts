@@ -4,6 +4,7 @@ import {
 	type AgentRecord,
 	type EventRow,
 	archiveThread,
+	deleteAgent,
 	listAgents,
 	listEcosystem,
 	listRecentEvents,
@@ -11,6 +12,7 @@ import {
 	markThreadRead,
 	markThreadUnread,
 	readAgent,
+	readEvent,
 	recordEvent,
 	unarchiveThread,
 	writeAgent,
@@ -28,21 +30,28 @@ const AGENT_URL_DEFAULTS: Record<string, string> = {
 	gateway: "http://127.0.0.1:3774",
 };
 
-function parseAgentUrls(): Record<string, string> {
+function loadAgentUrls(): Record<string, string> {
+	// Layered, lowest-precedence first: hard-coded dev defaults, then any
+	// URLs we previously resolved (from the agents table — so a manually
+	// added agent's URL survives a restart), then the env var override.
 	const out: Record<string, string> = { ...AGENT_URL_DEFAULTS };
+	for (const a of listEcosystem()) {
+		if (a.url) out[a.id] = a.url;
+	}
 	const raw = process.env.BINDU_AGENT_URLS;
-	if (!raw) return out;
-	for (const pair of raw.split(",")) {
-		const eq = pair.indexOf("=");
-		if (eq <= 0) continue;
-		const id = pair.slice(0, eq).trim();
-		const url = pair.slice(eq + 1).trim();
-		if (id && url) out[id] = url;
+	if (raw) {
+		for (const pair of raw.split(",")) {
+			const eq = pair.indexOf("=");
+			if (eq <= 0) continue;
+			const id = pair.slice(0, eq).trim();
+			const url = pair.slice(eq + 1).trim();
+			if (id && url) out[id] = url;
+		}
 	}
 	return out;
 }
 
-const AGENT_URLS = parseAgentUrls();
+const AGENT_URLS = loadAgentUrls();
 
 const subscribers = new Set<(e: EventRow) => void>();
 
@@ -84,11 +93,17 @@ async function fetchWellKnown(base: string) {
 	return { did: didR as unknown, agentCard: cardR as unknown };
 }
 
-async function resolveAgent(agentId: string): Promise<AgentRecord> {
-	const cached = readAgent(agentId);
-	if (cached?.did && cached?.agentCard) return cached;
-	const base = cached?.url ?? AGENT_URLS[agentId];
-	const rec: AgentRecord = cached ?? { id: agentId, url: base, source: "webhook" };
+async function resolveAgent(
+	agentId: string,
+	cached?: AgentRecord | null,
+): Promise<AgentRecord> {
+	// Callers that already have the DB row (e.g. the webhook handler that
+	// just read it to decide whether to write) can hand it in so we don't
+	// redo the SELECT.
+	const row = cached === undefined ? readAgent(agentId) : cached;
+	if (row?.did && row?.agentCard) return row;
+	const base = row?.url ?? AGENT_URLS[agentId];
+	const rec: AgentRecord = row ?? { id: agentId, url: base, source: "webhook" };
 	if (!base) {
 		writeAgent(rec);
 		return rec;
@@ -146,7 +161,8 @@ app.post("/webhooks/bindu/:agentId", async (c) => {
 		});
 	}
 	if (!seen?.agentCard) {
-		resolveAgent(agentId).catch(() => {});
+		// Hand `seen` through so resolveAgent skips a redundant SELECT.
+		resolveAgent(agentId, seen).catch(() => {});
 	}
 	return c.json({ ok: true });
 });
@@ -200,6 +216,15 @@ app.get("/api/ecosystem", (c) => {
 	const blocked = authMiddleware(c);
 	if (blocked) return c.json(blocked, 401);
 	return c.json(listEcosystem());
+});
+
+app.delete("/api/ecosystem/:agentId", (c) => {
+	const blocked = authMiddleware(c);
+	if (blocked) return c.json(blocked, 401);
+	const id = c.req.param("agentId");
+	if (!AGENT_ID_RE.test(id)) return c.json({ error: "invalid-agent-id" }, 400);
+	const removed = deleteAgent(id);
+	return c.json({ ok: true, removed });
 });
 
 app.post("/api/ecosystem", async (c) => {
@@ -353,8 +378,9 @@ app.post("/api/compose", async (c) => {
 	}
 
 	const now = new Date().toISOString();
+	const eventId = crypto.randomUUID();
 	const outboundEvent = {
-		event_id: crypto.randomUUID(),
+		event_id: eventId,
 		timestamp: now,
 		kind: "outbound",
 		direction: "out",
@@ -371,11 +397,10 @@ app.post("/api/compose", async (c) => {
 		upstream_error: upstreamError,
 	} as Record<string, unknown>;
 
-	const recordedId = String(outboundEvent.event_id);
-	recordEvent(recordedId, OUTBOX_AGENT_ID, now, outboundEvent);
+	recordEvent(eventId, OUTBOX_AGENT_ID, now, outboundEvent);
 	for (const cb of subscribers) {
 		cb({
-			id: recordedId,
+			id: eventId,
 			agentId: OUTBOX_AGENT_ID,
 			receivedAt: now,
 			payload: outboundEvent,
@@ -413,9 +438,7 @@ app.post("/api/events/:id/action", async (c) => {
 	const blocked = authMiddleware(c);
 	if (blocked) return c.json(blocked, 401);
 	const evId = c.req.param("id");
-	// Look up the event in the recent buffer. We don't load every historical
-	// row — the action UI only lives on events you can still see.
-	const ev = listRecentEvents(1000).find((e) => e.id === evId);
+	const ev = readEvent(evId);
 	if (!ev) return c.json({ error: "event-not-found" }, 404);
 	const body = (await c.req.json().catch(() => ({}))) as {
 		kind?: "approve" | "decline" | "input" | "pay";

@@ -133,18 +133,6 @@ function GlanceBody() {
 				</div>
 			</Section>
 
-			{event.recipe && (
-				<Section label="Recipe">
-					<div className="text-[13px] text-[--color-cobalt-strong]">{event.recipe}</div>
-				</Section>
-			)}
-
-			{event.planStep && (
-				<Section label="Planner rationale">
-					<div className="text-[12px] text-fg-muted">{event.planStep}</div>
-				</Section>
-			)}
-
 			{event.action && <ActionPanel eventId={event.id} actionKind={event.action.kind} actionLabel={event.action.label} />}
 		</div>
 	);

@@ -81,6 +81,9 @@ const trimEvents = db.prepare(
 const recentEvents = db.prepare(
 	"SELECT id, agent_id AS agentId, received_at AS receivedAt, payload, first_contact AS firstContact FROM events ORDER BY received_at ASC LIMIT ?",
 );
+const getEventById = db.prepare(
+	"SELECT id, agent_id AS agentId, received_at AS receivedAt, payload, first_contact AS firstContact FROM events WHERE id = ?",
+);
 const distinctAgents = db.prepare(
 	"SELECT DISTINCT agent_id AS agentId FROM events",
 );
@@ -105,6 +108,12 @@ const upsertAgent = db.prepare(`
 `);
 
 const MAX_EVENTS = 1000;
+// We trim every Nth insert instead of every insert. The `DELETE … OFFSET 1000`
+// query is cheap relative to the index, but at high webhook volume it still
+// adds up — and the bound is soft (a buffer briefly over MAX_EVENTS does no
+// harm). 32 keeps us within ~3% of the target.
+const TRIM_EVERY = 32;
+let insertsSinceTrim = 0;
 
 export function recordEvent(
 	id: string,
@@ -120,26 +129,38 @@ export function recordEvent(
 		firstContact = result.changes > 0;
 	}
 	insertEvent.run(id, agentId, receivedAt, JSON.stringify(payload), firstContact ? 1 : 0);
-	trimEvents.run(MAX_EVENTS);
+	if (++insertsSinceTrim >= TRIM_EVERY) {
+		insertsSinceTrim = 0;
+		trimEvents.run(MAX_EVENTS);
+	}
 	return firstContact;
 }
 
-export function listRecentEvents(limit = 50): EventRow[] {
-	type Row = {
-		id: string;
-		agentId: string;
-		receivedAt: string;
-		payload: string;
-		firstContact: number;
-	};
-	const rows = recentEvents.all(limit) as Row[];
-	return rows.map((r) => ({
+type EventDbRow = {
+	id: string;
+	agentId: string;
+	receivedAt: string;
+	payload: string;
+	firstContact: number;
+};
+
+function dbRowToEvent(r: EventDbRow): EventRow {
+	return {
 		id: r.id,
 		agentId: r.agentId,
 		receivedAt: r.receivedAt,
 		payload: JSON.parse(r.payload) as Record<string, unknown>,
 		firstContact: !!r.firstContact,
-	}));
+	};
+}
+
+export function listRecentEvents(limit = 50): EventRow[] {
+	return (recentEvents.all(limit) as EventDbRow[]).map(dbRowToEvent);
+}
+
+export function readEvent(id: string): EventRow | null {
+	const row = getEventById.get(id) as EventDbRow | undefined;
+	return row ? dbRowToEvent(row) : null;
 }
 
 export function listAgents(): string[] {
@@ -199,6 +220,11 @@ export function writeAgent(rec: AgentRecord): void {
 		source: rec.source ?? "webhook",
 		addedAt: rec.addedAt ?? null,
 	});
+}
+
+const deleteAgentStmt = db.prepare("DELETE FROM agents WHERE id = ?");
+export function deleteAgent(id: string): boolean {
+	return deleteAgentStmt.run(id).changes > 0;
 }
 
 // --- thread state (read / unread / archive) -----------------------------

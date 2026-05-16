@@ -53,9 +53,12 @@ export interface StreamEvent {
 	action?: { kind: "approve" | "pay" | "input"; label: string };
 	signed: boolean;
 	verify: { signature: boolean; didMatch: boolean; nonce: string };
+	/** Pretty-printed JSON of the source payload, kept for the Inspect tab. */
 	payload?: string;
-	recipe?: string;
-	planStep?: string;
+	/** Parsed payload object — populated at SSE-ingest so downstream code
+	 * (thread grouping, search, subject derivation) doesn't re-`JSON.parse`
+	 * the same string five times per render. */
+	payloadJson?: Record<string, unknown>;
 }
 
 export type DetailTab = "glance" | "verify" | "inspect";

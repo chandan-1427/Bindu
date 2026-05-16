@@ -96,15 +96,9 @@ export function ThreadView({ contextId }: Props) {
 function deriveReplyTarget(events: StreamEvent[]): string | null {
 	// First preference: an outbound event with to_agent_id field.
 	for (const e of events) {
-		if (e.agentId !== OUTBOX_AGENT_ID || !e.payload) continue;
-		try {
-			const p = JSON.parse(e.payload) as { to_agent_id?: string };
-			if (typeof p.to_agent_id === "string" && p.to_agent_id.length > 0) {
-				return p.to_agent_id;
-			}
-		} catch {
-			// no-op
-		}
+		if (e.agentId !== OUTBOX_AGENT_ID) continue;
+		const to = e.payloadJson?.to_agent_id;
+		if (typeof to === "string" && to.length > 0) return to;
 	}
 	// Fallback: the first non-outbox lane is the agent processing this thread.
 	for (const e of events) {

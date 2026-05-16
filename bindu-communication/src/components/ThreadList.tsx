@@ -34,16 +34,10 @@ function matchesQuery(t: Thread, q: string): boolean {
 	if (e.counterparty.did.toLowerCase().includes(needle)) return true;
 	if (e.summary.toLowerCase().includes(needle)) return true;
 	if (t.contextId.toLowerCase().includes(needle)) return true;
-	if (e.payload) {
-		try {
-			const p = JSON.parse(e.payload) as Record<string, unknown>;
-			const text = typeof p.text === "string" ? (p.text as string).toLowerCase() : "";
-			if (text.includes(needle)) return true;
-			const eventType = typeof p.event_type === "string" ? (p.event_type as string).toLowerCase() : "";
-			if (eventType.includes(needle)) return true;
-		} catch {
-			// no-op
-		}
+	const p = e.payloadJson;
+	if (p) {
+		if (typeof p.text === "string" && p.text.toLowerCase().includes(needle)) return true;
+		if (typeof p.event_type === "string" && p.event_type.toLowerCase().includes(needle)) return true;
 	}
 	return false;
 }
@@ -68,14 +62,25 @@ export function ThreadList({ events, mode = "inbox", query = "" }: Props) {
 	const archiveThread = useUI((s) => s.archiveThread);
 	const unarchiveThread = useUI((s) => s.unarchiveThread);
 	const archivedThreads = useUI((s) => s.archivedThreads);
-	const grouped = groupByThread(events);
-	const folderScoped =
-		mode === "inbox" || mode === "sent" || mode === "archive"
-			? grouped.filter((t) => threadInFolder(t, mode, archivedThreads))
-			: grouped;
-	const threads = query
-		? folderScoped.filter((t) => matchesQuery(t, query))
-		: folderScoped;
+	// `groupByThread` walks the entire event buffer twice — pulling it
+	// inside useMemo means we only rebuild when the buffer itself changes,
+	// not on every selection/keystroke. Folder + query filtering is cheap
+	// (per-thread predicates), so they stay outside.
+	const grouped = useMemo(() => groupByThread(events), [events]);
+	const folderScoped = useMemo(
+		() =>
+			mode === "inbox" || mode === "sent" || mode === "archive"
+				? grouped.filter((t) => threadInFolder(t, mode, archivedThreads))
+				: grouped,
+		[grouped, mode, archivedThreads],
+	);
+	const threads = useMemo(
+		() =>
+			query
+				? folderScoped.filter((t) => matchesQuery(t, query))
+				: folderScoped,
+		[folderScoped, query],
+	);
 
 	// Bulk selection — local to this list. Cleared when folder/query/mode
 	// changes (folder switch already remounts via key but the query change
@@ -409,26 +414,16 @@ function ThreadRow({
 function subjectFor(thread: Thread): string {
 	// Try to read the outbound body from the EARLIEST outbound event in the
 	// thread — operator-canonical "subject" of the conversation.
-	if (thread.earliest.agentId === "outbox" && thread.earliest.payload) {
-		try {
-			const p = JSON.parse(thread.earliest.payload) as { text?: string };
-			if (typeof p.text === "string" && p.text.trim().length > 0) {
-				return p.text;
-			}
-		} catch {
-			// no-op
-		}
+	if (thread.earliest.agentId === "outbox") {
+		const text = thread.earliest.payloadJson?.text;
+		if (typeof text === "string" && text.trim().length > 0) return text;
 	}
 
 	const e = thread.latest;
 
 	// Outbound: latest event has the body text.
-	try {
-		const p = e.payload ? JSON.parse(e.payload) : null;
-		if (p?.text && typeof p.text === "string") return p.text;
-	} catch {
-		// no-op
-	}
+	const latestText = e.payloadJson?.text;
+	if (typeof latestText === "string") return latestText;
 
 	// Inbound + lifecycle: humanize the state instead of "state → working".
 	if (e.state) {

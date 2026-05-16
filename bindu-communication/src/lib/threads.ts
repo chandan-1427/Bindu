@@ -65,12 +65,15 @@ export function groupByThread(events: StreamEvent[]): Thread[] {
 			existing.earliestTs = e.ts;
 		}
 	}
-	// Second pass: derive origin + otherPartyAgentId from the assembled thread.
-	for (const t of byCtx.values()) {
+	// Materialise threads in one pass — derive origin + otherPartyAgentId
+	// inline (both depend on `earliest`, which is only known after the
+	// aggregation loop above finishes).
+	const threads = Array.from(byCtx.values(), (t) => {
 		t.origin = t.earliest.agentId === OUTBOX_AGENT_ID ? "operator" : "other";
 		t.otherPartyAgentId = inferOtherParty(t);
-	}
-	return Array.from(byCtx.values()).sort((a, b) => {
+		return t;
+	});
+	return threads.sort((a, b) => {
 		// Attention threads pinned to top, then by latest timestamp DESC.
 		const a1 = a.attentionCount > 0 ? 1 : 0;
 		const b1 = b.attentionCount > 0 ? 1 : 0;
@@ -81,15 +84,9 @@ export function groupByThread(events: StreamEvent[]): Thread[] {
 
 function inferOtherParty(t: Thread): string | null {
 	// Operator-initiated: pick the recipient declared on the outbound event.
-	if (t.origin === "operator" && t.earliest.payload) {
-		try {
-			const p = JSON.parse(t.earliest.payload) as { to_agent_id?: string };
-			if (typeof p.to_agent_id === "string" && p.to_agent_id.length > 0) {
-				return p.to_agent_id;
-			}
-		} catch {
-			// no-op
-		}
+	if (t.origin === "operator") {
+		const to = t.earliest.payloadJson?.to_agent_id;
+		if (typeof to === "string" && to.length > 0) return to;
 	}
 	// Other-initiated: pick the first non-outbox lane.
 	for (const id of t.agentIds) {
@@ -134,16 +131,8 @@ export function threadInFolder(
  *   correspondent / per gateway session).
  */
 export function extractContextId(e: StreamEvent): string | null {
-	if (e.payload) {
-		try {
-			const p = JSON.parse(e.payload) as { context_id?: string };
-			if (typeof p.context_id === "string" && p.context_id.length > 0) {
-				return p.context_id;
-			}
-		} catch {
-			// fall through
-		}
-	}
+	const ctx = e.payloadJson?.context_id;
+	if (typeof ctx === "string" && ctx.length > 0) return ctx;
 	if (e.counterparty?.did) return e.counterparty.did;
 	return null;
 }

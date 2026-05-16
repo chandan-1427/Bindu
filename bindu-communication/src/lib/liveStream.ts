@@ -61,6 +61,14 @@ function normalizeState(raw: string | undefined, isArtifact: boolean): EventStat
 	return KNOWN_STATES.has(raw as EventState) ? (raw as EventState) : undefined;
 }
 
+/** Pull the HH:MM:SS slice out of `payload.timestamp` (ISO8601), falling
+ * back to the receiver's wall-clock when the upstream didn't carry one.
+ * Three mappers used to inline this; one helper keeps them in sync. */
+function pickTs(raw: RawWebhook): { hms: string; iso: string } {
+	const iso = raw.payload.timestamp ?? raw.receivedAt;
+	return { hms: iso.slice(11, 19), iso };
+}
+
 function mapOutboundEvent(raw: RawWebhook): StreamEvent {
 	const p = raw.payload;
 	const upstreamOk =
@@ -68,13 +76,13 @@ function mapOutboundEvent(raw: RawWebhook): StreamEvent {
 	const summary = p.upstream_error
 		? `Send failed: ${p.upstream_error.slice(0, 80)}`
 		: `“${(p.text ?? "").slice(0, 120)}”`;
-	const fullTs = p.timestamp ?? raw.receivedAt;
+	const { hms, iso } = pickTs(raw);
 	return {
 		id: raw.id,
 		agentId: raw.agentId,
-		ts: fullTs.slice(11, 19),
+		ts: hms,
 		relTs: "just now",
-		at: fullTs,
+		at: iso,
 		counterparty: {
 			name: p.to_agent_id ?? "agent",
 			did: p.to_did ?? `did:bindu:?:${p.to_agent_id ?? "?"}`,
@@ -90,6 +98,7 @@ function mapOutboundEvent(raw: RawWebhook): StreamEvent {
 			nonce: (p.message_id ?? "").slice(0, 8) || "—",
 		},
 		payload: JSON.stringify(p, null, 2),
+		payloadJson: p as Record<string, unknown>,
 	};
 }
 
@@ -137,14 +146,14 @@ function mapGatewayEvent(raw: RawWebhook): StreamEvent {
 	const sigs = (props.signatures as Record<string, unknown> | null | undefined) ?? null;
 	const signed = !!sigs && (sigs.signed as number) > 0;
 
-	const gwTs = p.timestamp ?? raw.receivedAt;
+	const { hms, iso } = pickTs(raw);
 	return {
 		id: raw.id,
 		agentId: raw.agentId,
 		parentId: p.parent_id || undefined,
-		ts: gwTs.slice(11, 19),
+		ts: hms,
 		relTs: "live",
-		at: gwTs,
+		at: iso,
 		counterparty: {
 			name: counterpartyName,
 			did: `did:bindu:gateway:${String(props.sessionID ?? "?").slice(0, 8)}`,
@@ -160,6 +169,7 @@ function mapGatewayEvent(raw: RawWebhook): StreamEvent {
 			nonce: String(props.callID ?? p.event_id ?? "").slice(0, 8) || "—",
 		},
 		payload: JSON.stringify(p, null, 2),
+		payloadJson: p as Record<string, unknown>,
 	};
 }
 
@@ -196,13 +206,13 @@ export function mapWebhookToEvent(raw: RawWebhook): StreamEvent {
 	// the webhook URL/token, not cryptographically signed. Mark honestly
 	// as unsigned. Real Ed25519 verification of artifact bodies is a
 	// future change.
-	const lifecycleTs = p.timestamp ?? raw.receivedAt;
+	const { hms, iso } = pickTs(raw);
 	return {
 		id: raw.id,
 		agentId: raw.agentId,
-		ts: lifecycleTs.slice(11, 19),
+		ts: hms,
 		relTs: "live",
-		at: lifecycleTs,
+		at: iso,
 		counterparty: {
 			name: taskShort,
 			did: `did:bindu:task:${p.task_id ?? "?"}`,
@@ -220,5 +230,6 @@ export function mapWebhookToEvent(raw: RawWebhook): StreamEvent {
 			nonce: (p.event_id ?? "").slice(0, 8) || "—",
 		},
 		payload: JSON.stringify(p, null, 2),
+		payloadJson: p as Record<string, unknown>,
 	};
 }

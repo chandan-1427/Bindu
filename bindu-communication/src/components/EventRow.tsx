@@ -67,11 +67,6 @@ export function EventRow({ event, attentionLane }: Props) {
 				<div className="mt-0.5 truncate text-[12px] text-fg-muted">
 					{event.summary}
 				</div>
-				{event.recipe && (
-					<div className="mt-0.5 text-[10px] text-[--color-cobalt-strong]">
-						recipe · {event.recipe}
-					</div>
-				)}
 			</div>
 
 			<div className="flex shrink-0 flex-col items-end gap-1">

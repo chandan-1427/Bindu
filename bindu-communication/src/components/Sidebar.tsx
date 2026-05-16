@@ -8,6 +8,7 @@ import {
 	PencilSimpleIcon,
 	ArchiveIcon,
 	FileIcon,
+	TrashIcon,
 } from "@phosphor-icons/react";
 import { useUI } from "~/state";
 import { shortDid } from "~/lib/format";
@@ -20,18 +21,29 @@ function useEcosystem() {
 	const [tick, setTick] = useState(0);
 	useEffect(() => {
 		let cancelled = false;
-		const refresh = () =>
+		const refresh = () => {
+			// Skip when the tab isn't visible — no point hammering
+			// /api/ecosystem every 5s in a background tab. The
+			// visibilitychange listener below kicks an immediate refresh
+			// the moment the user comes back.
+			if (typeof document !== "undefined" && document.hidden) return;
 			fetch("/api/ecosystem")
 				.then((r) => (r.ok ? r.json() : []))
 				.then((j) => {
 					if (!cancelled) setList(j as EcosystemAgent[]);
 				})
 				.catch(() => {});
+		};
 		refresh();
 		const t = setInterval(refresh, 5000);
+		const onVis = () => {
+			if (!document.hidden) refresh();
+		};
+		document.addEventListener("visibilitychange", onVis);
 		return () => {
 			cancelled = true;
 			clearInterval(t);
+			document.removeEventListener("visibilitychange", onVis);
 		};
 	}, [tick]);
 	return { list, reload: () => setTick((n) => n + 1) };
@@ -43,6 +55,24 @@ const FOLDERS = [
 	{ to: "/drafts", label: "Drafts", icon: FileIcon },
 	{ to: "/archive", label: "Archive", icon: ArchiveIcon },
 ] as const;
+
+/**
+ * Some agno-based agents don't publish /.well-known/did.json but DO embed
+ * their DID inside agent_card.capabilities.extensions[].uri. Pull it from
+ * there so the Contacts row shows the real DID instead of a "?" placeholder.
+ */
+function pickDidFromCard(
+	card: { capabilities?: { extensions?: Array<{ uri?: string }> } | unknown } | null | undefined,
+): string | null {
+	const caps = (card?.capabilities ?? {}) as {
+		extensions?: Array<{ uri?: string }>;
+	};
+	const exts = Array.isArray(caps.extensions) ? caps.extensions : [];
+	for (const x of exts) {
+		if (typeof x?.uri === "string" && x.uri.startsWith("did:")) return x.uri;
+	}
+	return null;
+}
 
 export function Sidebar() {
 	const openCompose = useUI((s) => s.openCompose);
@@ -127,19 +157,29 @@ export function Sidebar() {
 					</button>
 				</div>
 				<div className="scrollbar min-h-0 flex-1 overflow-y-auto">
-					{ecosystem.length === 0 ? (
-						<div className="px-3 py-1 text-[10px] text-fg-dim">
-							No contacts. Click + to add.
-						</div>
-					) : (
-						ecosystem.map((a) => {
+					{(() => {
+						// Hide the synthetic outbox bucket; it's the operator's
+						// "Sent" folder, not a contact you'd ever write to.
+						const visible = ecosystem.filter((a) => a.id !== "outbox");
+						if (visible.length === 0) {
+							return (
+								<div className="px-3 py-1 text-[10px] text-fg-dim">
+									No contacts. Click + to add.
+								</div>
+							);
+						}
+						return visible.map((a) => {
 							const name = a.agentCard?.name ?? a.id;
-							const didId = a.did?.id ?? `did:bindu:?:${a.id}`;
+							const didFromCard = pickDidFromCard(a.agentCard);
+							const realDid = a.did?.id ?? didFromCard;
+							const subline = realDid
+								? shortDid(realDid)
+								: a.url ?? "no URL yet";
 							return (
 								<div
 									key={a.id}
-									className="flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-left"
-									title={didId}
+									className="group flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-left hover:bg-[--color-row-hover]"
+									title={realDid ?? a.url ?? a.id}
 								>
 									<span
 										className="flex h-6 w-6 shrink-0 items-center justify-center text-[15px] leading-none"
@@ -150,13 +190,28 @@ export function Sidebar() {
 									<div className="min-w-0 flex-1">
 										<div className="truncate text-[12px] text-fg">{name}</div>
 										<div className="truncate text-[10px] text-fg-dim">
-											{shortDid(didId)}
+											{subline}
 										</div>
 									</div>
+									<button
+										type="button"
+										onClick={async (ev) => {
+											ev.stopPropagation();
+											if (!window.confirm(`Remove ${name} from contacts?`)) return;
+											await fetch(`/api/ecosystem/${encodeURIComponent(a.id)}`, {
+												method: "DELETE",
+											}).catch(() => {});
+											reloadEcosystem();
+										}}
+										title="Remove contact"
+										className="shrink-0 rounded p-1 text-fg-dim opacity-0 transition group-hover:opacity-100 hover:bg-rose-50 hover:text-rose-700"
+									>
+										<TrashIcon size={11} weight="bold" />
+									</button>
 								</div>
 							);
-						})
-					)}
+						});
+					})()}
 				</div>
 			</div>
 
