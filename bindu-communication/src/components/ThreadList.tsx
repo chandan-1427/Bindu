@@ -1,5 +1,10 @@
 import clsx from "clsx";
-import { ArrowBendUpLeftIcon, TrayIcon } from "@phosphor-icons/react";
+import {
+	ArrowBendUpLeftIcon,
+	EnvelopeOpenIcon,
+	EnvelopeSimpleIcon,
+	TrayIcon,
+} from "@phosphor-icons/react";
 import { useUI } from "~/state";
 import {
 	groupByThread,
@@ -17,16 +22,27 @@ const OUTBOX_AGENT_ID = "outbox";
 /**
  * Gmail-shape thread list. Each row mirrors the agentic-inbox layout:
  *
- *   • dot · sender · count · needs-reply · date
- *                                            subject — snippet
+ *   • dot · sender · count · needs-reply · date          [hover: mark read/unread]
+ *                                          subject — snippet
  *
- * Unread / needs-reply both reduce to "thread has at least one event in
- * an attention state" for now; a proper read-state tracker comes later.
+ * "Unread" is computed from explicit overrides first, then falls back to
+ * attentionCount > 0. Overrides persist to localStorage so the user's
+ * triage state survives refreshes.
  */
 export function ThreadList({ events }: Props) {
 	const selectThread = useUI((s) => s.selectThread);
 	const selectEvent = useUI((s) => s.selectEvent);
+	const readOverrides = useUI((s) => s.readOverrides);
+	const unreadOverrides = useUI((s) => s.unreadOverrides);
+	const markRead = useUI((s) => s.markRead);
+	const markUnread = useUI((s) => s.markUnread);
 	const threads = groupByThread(events);
+
+	function isUnread(t: Thread): boolean {
+		if (unreadOverrides.has(t.contextId)) return true;
+		if (readOverrides.has(t.contextId)) return false;
+		return t.attentionCount > 0;
+	}
 
 	if (threads.length === 0) {
 		return (
@@ -50,7 +66,14 @@ export function ThreadList({ events }: Props) {
 	return (
 		<div>
 			{threads.map((t) => (
-				<ThreadRow key={t.contextId} thread={t} onOpen={open} />
+				<ThreadRow
+					key={t.contextId}
+					thread={t}
+					unread={isUnread(t)}
+					onOpen={open}
+					onMarkRead={() => markRead(t.contextId)}
+					onMarkUnread={() => markUnread(t.contextId)}
+				/>
 			))}
 		</div>
 	);
@@ -58,13 +81,19 @@ export function ThreadList({ events }: Props) {
 
 function ThreadRow({
 	thread,
+	unread,
 	onOpen,
+	onMarkRead,
+	onMarkUnread,
 }: {
 	thread: Thread;
+	unread: boolean;
 	onOpen: (t: Thread) => void;
+	onMarkRead: () => void;
+	onMarkUnread: () => void;
 }) {
 	const e = thread.latest;
-	const isUnread = thread.attentionCount > 0; // proxy: pending attention = unread
+	const isUnread = unread;
 	const isOutbound = e.agentId === OUTBOX_AGENT_ID;
 
 	// Sender / recipient label: in /inbox we show "From: name"; in /sent
@@ -125,6 +154,23 @@ function ThreadRow({
 					<span className="ml-auto shrink-0 text-[11px] text-fg-dim">
 						{e.relTs}
 					</span>
+					{/* Hover action — mark read/unread */}
+					<button
+						type="button"
+						onClick={(ev) => {
+							ev.stopPropagation();
+							if (isUnread) onMarkRead();
+							else onMarkUnread();
+						}}
+						title={isUnread ? "Mark as read" : "Mark as unread"}
+						className="shrink-0 rounded p-1 text-fg-dim opacity-0 transition group-hover:opacity-100 hover:bg-slate-100 hover:text-[--color-cobalt]"
+					>
+						{isUnread ? (
+							<EnvelopeOpenIcon size={13} weight="bold" />
+						) : (
+							<EnvelopeSimpleIcon size={13} weight="bold" />
+						)}
+					</button>
 				</div>
 				<div className="mt-0.5 truncate text-[12px]">
 					<span

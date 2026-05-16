@@ -25,6 +25,10 @@ interface UIState {
 	showCompose: boolean;
 	agents: Agent[];
 	liveEvents: StreamEvent[];
+	/** ctx ids the user has explicitly marked read */
+	readOverrides: Set<string>;
+	/** ctx ids the user has explicitly marked unread (overrides everything) */
+	unreadOverrides: Set<string>;
 
 	selectEvent: (id: string | null) => void;
 	selectThread: (contextId: string | null) => void;
@@ -38,6 +42,33 @@ interface UIState {
 	closeCompose: () => void;
 	registerAgent: (draft: NewAgentDraft) => Agent;
 	addLiveEvent: (e: StreamEvent) => void;
+	markRead: (contextId: string) => void;
+	markUnread: (contextId: string) => void;
+}
+
+const READ_LS_KEY = "bindu-comms:read-overrides";
+const UNREAD_LS_KEY = "bindu-comms:unread-overrides";
+
+function loadSet(key: string): Set<string> {
+	if (typeof window === "undefined") return new Set();
+	try {
+		const raw = window.localStorage.getItem(key);
+		if (!raw) return new Set();
+		const arr = JSON.parse(raw) as unknown;
+		if (!Array.isArray(arr)) return new Set();
+		return new Set(arr.filter((x): x is string => typeof x === "string"));
+	} catch {
+		return new Set();
+	}
+}
+
+function saveSet(key: string, s: Set<string>): void {
+	if (typeof window === "undefined") return;
+	try {
+		window.localStorage.setItem(key, JSON.stringify(Array.from(s)));
+	} catch {
+		// quota or denied — just skip persistence
+	}
 }
 
 export const useUI = create<UIState>((set) => ({
@@ -51,9 +82,26 @@ export const useUI = create<UIState>((set) => ({
 	showCompose: false,
 	agents: seedAgents,
 	liveEvents: [],
+	readOverrides: loadSet(READ_LS_KEY),
+	unreadOverrides: loadSet(UNREAD_LS_KEY),
 
 	selectEvent: (id) => set({ selectedEventId: id }),
-	selectThread: (contextId) => set({ selectedThreadId: contextId }),
+	selectThread: (contextId) =>
+		set((s) => {
+			// Opening a thread implicitly marks it read.
+			if (!contextId) return { selectedThreadId: null };
+			const read = new Set(s.readOverrides);
+			const unread = new Set(s.unreadOverrides);
+			read.add(contextId);
+			unread.delete(contextId);
+			saveSet(READ_LS_KEY, read);
+			saveSet(UNREAD_LS_KEY, unread);
+			return {
+				selectedThreadId: contextId,
+				readOverrides: read,
+				unreadOverrides: unread,
+			};
+		}),
 	setDetailTab: (tab) => set({ detailTab: tab }),
 	togglePause: () => set((s) => ({ streamPaused: !s.streamPaused })),
 	toggleTrace: (id) =>
@@ -86,6 +134,26 @@ export const useUI = create<UIState>((set) => ({
 		set((s) => ({ agents: [...s.agents, newAgent], showRegister: false }));
 		return newAgent;
 	},
+	markRead: (contextId) =>
+		set((s) => {
+			const read = new Set(s.readOverrides);
+			const unread = new Set(s.unreadOverrides);
+			read.add(contextId);
+			unread.delete(contextId);
+			saveSet(READ_LS_KEY, read);
+			saveSet(UNREAD_LS_KEY, unread);
+			return { readOverrides: read, unreadOverrides: unread };
+		}),
+	markUnread: (contextId) =>
+		set((s) => {
+			const read = new Set(s.readOverrides);
+			const unread = new Set(s.unreadOverrides);
+			read.delete(contextId);
+			unread.add(contextId);
+			saveSet(READ_LS_KEY, read);
+			saveSet(UNREAD_LS_KEY, unread);
+			return { readOverrides: read, unreadOverrides: unread };
+		}),
 	addLiveEvent: (e) =>
 		set((s) => {
 			const agents = s.agents.find((a) => a.id === e.agentId)
