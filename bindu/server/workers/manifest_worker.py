@@ -376,11 +376,17 @@ class ManifestWorker(Worker):
             error: Exception that occurred
             **extra_context: Additional context to log
         """
-        logger.warning(
+        # ERROR + traceback rather than a one-line WARNING. A failed
+        # notification is user-impacting (the operator's inbox never
+        # receives the artifact or state transition) and silent
+        # str(error) hides the call site — see the agno RunResponse →
+        # DataPart serialization bug that vanished here for weeks.
+        logger.opt(exception=error).error(
             f"{notification_type} notification failed",
             task_id=str(task_id),
             context_id=str(context_id),
             error=str(error),
+            error_type=type(error).__name__,
             **extra_context,
         )
 
@@ -419,7 +425,14 @@ class ManifestWorker(Worker):
         await self.storage.update_task(
             task["id"], state=state, new_messages=agent_messages, metadata=metadata
         )
-        await self._notify_lifecycle(task["id"], task["context_id"], state, False)
+        # Forward the rendered prompt to the operator inbox via the
+        # lifecycle webhook. Coerce to a string conservatively — if the
+        # handler returned a structured value without a "prompt" key,
+        # `content` is still that raw value here.
+        status_message = content if isinstance(content, str) else None
+        await self._notify_lifecycle(
+            task["id"], task["context_id"], state, False, status_message
+        )
 
     async def _handle_terminal_state(
         self,
@@ -620,7 +633,12 @@ class ManifestWorker(Worker):
                 self._log_notification_error("Artifact", task_id, context_id, e)
 
     async def _notify_lifecycle(
-        self, task_id: UUID, context_id: UUID, state: str, final: bool
+        self,
+        task_id: UUID,
+        context_id: UUID,
+        state: str,
+        final: bool,
+        status_message: str | None = None,
     ) -> None:
         """Notify lifecycle changes if notifier is configured.
 
@@ -629,10 +647,24 @@ class ManifestWorker(Worker):
             context_id: Context identifier
             state: New task state
             final: Whether this is a terminal state
+            status_message: Optional human-readable text for non-terminal
+                states (e.g., the agent's prompt for input-required).
+                Operator inboxes render this so the user can see what the
+                agent is waiting on instead of just "state changed".
         """
         if self.lifecycle_notifier:
             try:
-                result = self.lifecycle_notifier(task_id, context_id, state, final)
+                # Pass status_message only when supported by the notifier's
+                # signature — keeps third-party notifiers (which may still
+                # have the 4-arg shape) working.
+                try:
+                    result = self.lifecycle_notifier(
+                        task_id, context_id, state, final, status_message
+                    )
+                except TypeError:
+                    result = self.lifecycle_notifier(
+                        task_id, context_id, state, final
+                    )
                 # Handle both sync and async notifiers
                 if hasattr(result, "__await__"):
                     await result
