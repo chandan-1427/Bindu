@@ -179,7 +179,7 @@ signing_str = json.dumps(
 sig_b58 = base58.b58encode(SigningKey(seed).sign(signing_str.encode("utf-8")).signature).decode()
 ```
 
-> ⚠️ **The #1 cross-language gotcha.** JavaScript's `JSON.stringify` omits spaces after `:` and `,`; Python's `json.dumps` includes them. The signing payload above uses Python's defaults. If you sign one shape and the server reconstructs the other, signatures mismatch and you'll see `crypto_mismatch`. Use the [canonical fixture](#canonical-fixture) to verify your implementation in any language.
+> ⚠️ **The #1 cross-language gotcha.** JavaScript's `JSON.stringify` omits spaces after `:` and `,`; Python's `json.dumps` includes them. The signing payload above uses Python's defaults. If you sign one shape and the server reconstructs the other, the signature won't verify and you'll see HTTP 403 + `details.reason: invalid_signature`. Use the [canonical fixture](#canonical-fixture) to verify your implementation in any language.
 
 ### 4 · Send with all four headers
 
