@@ -331,6 +331,45 @@ export const layer = Layer.effect(
                   })
                   return
                 }
+                case "tool-error": {
+                  // AI SDK emits this when a tool's execute() throws —
+                  // e.g. callPeer hits HTTP 403 from a Hydra-protected
+                  // peer. Without this case the part stays `pending`
+                  // forever and no ToolCallEnd ever fires, leaving the
+                  // SSE bridge with a half-trace (task.started but no
+                  // task.finished). The LLM still receives the error
+                  // back as a tool result internally, so it can react,
+                  // but operators watching the SSE stream see a hang.
+                  const existing = partsByCall.get(evt.toolCallId)
+                  if (!existing) return
+                  const errMsg =
+                    evt.error instanceof Error
+                      ? evt.error.message
+                      : typeof evt.error === "string"
+                        ? evt.error
+                        : JSON.stringify(evt.error)
+                  existing.state = {
+                    status: "error",
+                    input:
+                      existing.state.status === "pending" || existing.state.status === "running"
+                        ? existing.state.input
+                        : undefined,
+                    error: errMsg,
+                    time: {
+                      start: existing.state.time?.start ?? Date.now(),
+                      end: Date.now(),
+                    },
+                  }
+                  yield* bus.publish(PromptEvent.ToolCallEnd, {
+                    sessionID: input.sessionID,
+                    messageID,
+                    partID: existing.id,
+                    callID: evt.toolCallId,
+                    tool: evt.toolName,
+                    error: errMsg,
+                  })
+                  return
+                }
                 case "finish": {
                   stopReason = mapFinishReason(evt.finishReason)
                   usage = {

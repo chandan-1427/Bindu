@@ -29,6 +29,12 @@ export type StreamEvent =
       output: unknown
     }
   | {
+      type: "tool-error"
+      toolCallId: string
+      toolName: string
+      error: unknown
+    }
+  | {
       type: "finish"
       finishReason: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "other" | "unknown"
       usage: {
@@ -108,6 +114,13 @@ function mapEvent(evt: any): StreamEvent | null {
         toolCallId: evt.toolCallId,
         toolName: evt.toolName,
         output: evt.output,
+      }
+    case "tool-error":
+      return {
+        type: "tool-error",
+        toolCallId: evt.toolCallId,
+        toolName: evt.toolName,
+        error: evt.error,
       }
     case "finish":
       return {
