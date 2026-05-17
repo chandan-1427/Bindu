@@ -11,7 +11,8 @@ repositories {
 }
 
 dependencies {
-    implementation(project(":"))  // bindu-sdk
+    // Resolved by the composite build in settings.gradle.kts (includeBuild ../../sdks/kotlin).
+    implementation("com.getbindu:bindu-sdk")
     implementation("com.google.code.gson:gson:2.10.1")
 }
 

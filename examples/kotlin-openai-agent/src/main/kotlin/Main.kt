@@ -23,20 +23,20 @@ val httpClient: HttpClient = HttpClient.newHttpClient()
 val gson = Gson()
 
 suspend fun callOpenAI(messages: List<ChatMessage>): String {
-    val apiKey = System.getenv("OPENAI_API_KEY")
-        ?: throw RuntimeException("OPENAI_API_KEY not set")
+    val apiKey = System.getenv("OPENROUTER_API_KEY")
+        ?: throw RuntimeException("OPENROUTER_API_KEY not set")
 
     val messagesJson = messages.map { msg ->
         mapOf("role" to msg.role, "content" to msg.content)
     }
 
     val body = gson.toJson(mapOf(
-        "model" to "gpt-4o",
+        "model" to "openai/gpt-4o-mini",
         "messages" to messagesJson
     ))
 
     val request = HttpRequest.newBuilder()
-        .uri(URI.create("https://api.openai.com/v1/chat/completions"))
+        .uri(URI.create("https://openrouter.ai/api/v1/chat/completions"))
         .header("Content-Type", "application/json")
         .header("Authorization", "Bearer $apiKey")
         .POST(HttpRequest.BodyPublishers.ofString(body))
@@ -65,7 +65,8 @@ fun main() {
                 "cors_origins" to listOf("http://localhost:5173")
             ),
         ),
-        skills = listOf("skills/question-answering")
+        skills = listOf("skills/question-answering"),
+        coreAddress = "localhost:4774"
     ) { messages ->
         // Call OpenAI and return the response
         callOpenAI(messages)
